@@ -1,0 +1,524 @@
+{
+  "sample_count": 1490,
+  "labels": [
+    "LEFT",
+    "RIGHT",
+    "ASCEND",
+    "DESCEND",
+    "HOVER",
+    "UNKNOWN",
+    "INVALID"
+  ],
+  "confusion_matrix": {
+    "LEFT": {
+      "LEFT": 220,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 37,
+      "INVALID": 0
+    },
+    "RIGHT": {
+      "LEFT": 0,
+      "RIGHT": 198,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 38,
+      "INVALID": 0
+    },
+    "ASCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 197,
+      "DESCEND": 5,
+      "HOVER": 0,
+      "UNKNOWN": 164,
+      "INVALID": 0
+    },
+    "DESCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 214,
+      "HOVER": 0,
+      "UNKNOWN": 119,
+      "INVALID": 0
+    },
+    "HOVER": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 264,
+      "UNKNOWN": 34,
+      "INVALID": 0
+    },
+    "UNKNOWN": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    },
+    "INVALID": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    }
+  },
+  "per_gesture": {
+    "LEFT": {
+      "tp": 220,
+      "fp": 0,
+      "fn": 37,
+      "precision": 1.0,
+      "recall": 0.8560311284046692,
+      "support": 257
+    },
+    "RIGHT": {
+      "tp": 198,
+      "fp": 0,
+      "fn": 38,
+      "precision": 1.0,
+      "recall": 0.8389830508474576,
+      "support": 236
+    },
+    "ASCEND": {
+      "tp": 197,
+      "fp": 0,
+      "fn": 169,
+      "precision": 1.0,
+      "recall": 0.5382513661202186,
+      "support": 366
+    },
+    "DESCEND": {
+      "tp": 214,
+      "fp": 5,
+      "fn": 119,
+      "precision": 0.9771689497716894,
+      "recall": 0.6426426426426426,
+      "support": 333
+    },
+    "HOVER": {
+      "tp": 264,
+      "fp": 0,
+      "fn": 34,
+      "precision": 1.0,
+      "recall": 0.8859060402684564,
+      "support": 298
+    }
+  },
+  "legal_action_rejection_rate": 0.26308724832214764,
+  "negative_sample_count": 0,
+  "false_trigger_count": 0,
+  "false_triggers": [],
+  "exact_accuracy": 0.7335570469798658,
+  "threshold_note": "Metrics are dataset measurements; no official universal PASS threshold is claimed.",
+  "sequence_level": {
+    "per_gesture": {
+      "ASCEND": {
+        "support_sequences": 5,
+        "tp_sequences": 4,
+        "fp_sequences": 0,
+        "fn_sequences": 1,
+        "precision": 1.0,
+        "recall": 0.8,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 4,
+          "mean": 320.75,
+          "median": 320.0,
+          "p95": 328.65,
+          "max": 330
+        }
+      },
+      "DESCEND": {
+        "support_sequences": 5,
+        "tp_sequences": 4,
+        "fp_sequences": 1,
+        "fn_sequences": 1,
+        "precision": 0.8,
+        "recall": 0.8,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 4,
+          "mean": 308.75,
+          "median": 308.5,
+          "p95": 315.70000000000005,
+          "max": 316
+        }
+      },
+      "HOVER": {
+        "support_sequences": 4,
+        "tp_sequences": 4,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 4,
+          "mean": 315.0,
+          "median": 314.5,
+          "p95": 328.2,
+          "max": 330
+        }
+      },
+      "LEFT": {
+        "support_sequences": 4,
+        "tp_sequences": 4,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 4,
+          "mean": 323.5,
+          "median": 322.5,
+          "p95": 331.65000000000003,
+          "max": 333
+        }
+      },
+      "RIGHT": {
+        "support_sequences": 4,
+        "tp_sequences": 4,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 4,
+          "mean": 325.75,
+          "median": 324.5,
+          "p95": 338.2,
+          "max": 340
+        }
+      }
+    },
+    "legal_sequence_count": 22,
+    "legal_sequence_success_rate": 0.9090909090909091,
+    "negative_sequence_count": 0,
+    "negative_false_trigger_sequence_count": 0,
+    "negative_false_trigger_sequence_rate": null,
+    "negative_frame_count": 0,
+    "negative_false_trigger_frame_count": 0,
+    "negative_false_trigger_frame_rate": null
+  },
+  "frame_metric_note": "Top-level frame metrics include the operator's neutral/setup/transition interval. Use sequence_level for intended-gesture confirmation and false-trigger acceptance.",
+  "recomputed_with_current_code": true,
+  "sequences": [
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0027_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 58,
+      "duration_ms": 2015,
+      "confirmation_from_sequence_start_ms": 321,
+      "confirmation_from_first_correct_raw_ms": 321,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 48
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0028_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 62,
+      "duration_ms": 2136,
+      "confirmation_from_sequence_start_ms": 324,
+      "confirmation_from_first_correct_raw_ms": 324,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 54
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0029_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 81,
+      "duration_ms": 2969,
+      "confirmation_from_sequence_start_ms": 316,
+      "confirmation_from_first_correct_raw_ms": 316,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 71
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0030_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 56,
+      "duration_ms": 2053,
+      "confirmation_from_sequence_start_ms": 333,
+      "confirmation_from_first_correct_raw_ms": 333,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 47
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0031_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 51,
+      "duration_ms": 1839,
+      "confirmation_from_sequence_start_ms": 340,
+      "confirmation_from_first_correct_raw_ms": 340,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 41
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0032_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 67,
+      "duration_ms": 2415,
+      "confirmation_from_sequence_start_ms": 321,
+      "confirmation_from_first_correct_raw_ms": 321,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 59
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0033_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 61,
+      "duration_ms": 1985,
+      "confirmation_from_sequence_start_ms": 314,
+      "confirmation_from_first_correct_raw_ms": 314,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 51
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0034_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 57,
+      "duration_ms": 1885,
+      "confirmation_from_sequence_start_ms": 328,
+      "confirmation_from_first_correct_raw_ms": 328,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 47
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0035_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 58,
+      "duration_ms": 2083,
+      "confirmation_from_sequence_start_ms": 330,
+      "confirmation_from_first_correct_raw_ms": 330,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 51
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0036_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 41,
+      "duration_ms": 1324,
+      "confirmation_from_sequence_start_ms": 319,
+      "confirmation_from_first_correct_raw_ms": 319,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 31
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0037_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 63,
+      "duration_ms": 2017,
+      "confirmation_from_sequence_start_ms": 313,
+      "confirmation_from_first_correct_raw_ms": 313,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 53
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0038_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 72,
+      "duration_ms": 2358,
+      "confirmation_from_sequence_start_ms": 321,
+      "confirmation_from_first_correct_raw_ms": 321,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 62
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0039_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 132,
+      "duration_ms": 4545,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 5
+      },
+      "confirmed_expected_label": false,
+      "wrong_stable_labels": {
+        "DESCEND": 5
+      }
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0040_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 82,
+      "duration_ms": 2982,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": false,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0041_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 71,
+      "duration_ms": 2341,
+      "confirmation_from_sequence_start_ms": 314,
+      "confirmation_from_first_correct_raw_ms": 314,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 61
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0042_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 73,
+      "duration_ms": 2349,
+      "confirmation_from_sequence_start_ms": 303,
+      "confirmation_from_first_correct_raw_ms": 303,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 63
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0043_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 57,
+      "duration_ms": 2019,
+      "confirmation_from_sequence_start_ms": 302,
+      "confirmation_from_first_correct_raw_ms": 302,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 49
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0044_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 50,
+      "duration_ms": 1766,
+      "confirmation_from_sequence_start_ms": 316,
+      "confirmation_from_first_correct_raw_ms": 316,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 41
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0045_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 71,
+      "duration_ms": 2624,
+      "confirmation_from_sequence_start_ms": 301,
+      "confirmation_from_first_correct_raw_ms": 301,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 63
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0046_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 86,
+      "duration_ms": 2968,
+      "confirmation_from_sequence_start_ms": 318,
+      "confirmation_from_first_correct_raw_ms": 318,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 78
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0047_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 80,
+      "duration_ms": 2743,
+      "confirmation_from_sequence_start_ms": 330,
+      "confirmation_from_first_correct_raw_ms": 330,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 72
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0048_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 61,
+      "duration_ms": 1976,
+      "confirmation_from_sequence_start_ms": 311,
+      "confirmation_from_first_correct_raw_ms": 311,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 51
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    }
+  ]
+}

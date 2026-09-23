@@ -1,0 +1,560 @@
+{
+  "sample_count": 5061,
+  "labels": [
+    "LEFT",
+    "RIGHT",
+    "ASCEND",
+    "DESCEND",
+    "HOVER",
+    "UNKNOWN",
+    "INVALID"
+  ],
+  "confusion_matrix": {
+    "LEFT": {
+      "LEFT": 278,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 397,
+      "INVALID": 168
+    },
+    "RIGHT": {
+      "LEFT": 0,
+      "RIGHT": 92,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 115,
+      "INVALID": 0
+    },
+    "ASCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 83,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 29,
+      "INVALID": 0
+    },
+    "DESCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 210,
+      "HOVER": 0,
+      "UNKNOWN": 62,
+      "INVALID": 10
+    },
+    "HOVER": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 206,
+      "UNKNOWN": 26,
+      "INVALID": 0
+    },
+    "UNKNOWN": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 1682,
+      "INVALID": 1703
+    },
+    "INVALID": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    }
+  },
+  "per_gesture": {
+    "LEFT": {
+      "tp": 278,
+      "fp": 0,
+      "fn": 565,
+      "precision": 1.0,
+      "recall": 0.32977461447212336,
+      "support": 843
+    },
+    "RIGHT": {
+      "tp": 92,
+      "fp": 0,
+      "fn": 115,
+      "precision": 1.0,
+      "recall": 0.4444444444444444,
+      "support": 207
+    },
+    "ASCEND": {
+      "tp": 83,
+      "fp": 0,
+      "fn": 29,
+      "precision": 1.0,
+      "recall": 0.7410714285714286,
+      "support": 112
+    },
+    "DESCEND": {
+      "tp": 210,
+      "fp": 0,
+      "fn": 72,
+      "precision": 1.0,
+      "recall": 0.7446808510638298,
+      "support": 282
+    },
+    "HOVER": {
+      "tp": 206,
+      "fp": 0,
+      "fn": 26,
+      "precision": 1.0,
+      "recall": 0.8879310344827587,
+      "support": 232
+    }
+  },
+  "legal_action_rejection_rate": 0.4815035799522673,
+  "negative_sample_count": 3385,
+  "false_trigger_count": 0,
+  "false_triggers": [],
+  "exact_accuracy": 0.5040505828887571,
+  "threshold_note": "Metrics are dataset measurements; no official universal PASS threshold is claimed.",
+  "sequence_level": {
+    "per_gesture": {
+      "ASCEND": {
+        "support_sequences": 3,
+        "tp_sequences": 3,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 3,
+          "mean": 324.0,
+          "median": 318,
+          "p95": 341.4,
+          "max": 344
+        }
+      },
+      "DESCEND": {
+        "support_sequences": 3,
+        "tp_sequences": 3,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 3,
+          "mean": 532.6666666666666,
+          "median": 318,
+          "p95": 912.0,
+          "max": 978
+        }
+      },
+      "HOVER": {
+        "support_sequences": 3,
+        "tp_sequences": 3,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 3,
+          "mean": 313.3333333333333,
+          "median": 314,
+          "p95": 321.2,
+          "max": 322
+        }
+      },
+      "LEFT": {
+        "support_sequences": 4,
+        "tp_sequences": 4,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 4,
+          "mean": 327.75,
+          "median": 333.5,
+          "p95": 338.7,
+          "max": 339
+        }
+      },
+      "RIGHT": {
+        "support_sequences": 3,
+        "tp_sequences": 3,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 3,
+          "mean": 318.6666666666667,
+          "median": 315,
+          "p95": 325.79999999999995,
+          "max": 327
+        }
+      }
+    },
+    "legal_sequence_count": 16,
+    "legal_sequence_success_rate": 1.0,
+    "negative_sequence_count": 10,
+    "negative_false_trigger_sequence_count": 0,
+    "negative_false_trigger_sequence_rate": 0.0,
+    "negative_frame_count": 3385,
+    "negative_false_trigger_frame_count": 0,
+    "negative_false_trigger_frame_rate": 0.0
+  },
+  "frame_metric_note": "Top-level frame metrics include the operator's neutral/setup/transition interval. Use sequence_level for intended-gesture confirmation and false-trigger acceptance.",
+  "recomputed_with_current_code": true,
+  "sequences": [
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0001_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 308,
+      "duration_ms": 10703,
+      "confirmation_from_sequence_start_ms": 5496,
+      "confirmation_from_first_correct_raw_ms": 339,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 69
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0002_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 289,
+      "duration_ms": 10228,
+      "confirmation_from_sequence_start_ms": 7451,
+      "confirmation_from_first_correct_raw_ms": 330,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 23
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0003_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 173,
+      "duration_ms": 5720,
+      "confirmation_from_sequence_start_ms": 1773,
+      "confirmation_from_first_correct_raw_ms": 337,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 122
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0004_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 73,
+      "duration_ms": 2350,
+      "confirmation_from_sequence_start_ms": 305,
+      "confirmation_from_first_correct_raw_ms": 305,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 64
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0005_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 76,
+      "duration_ms": 2712,
+      "confirmation_from_sequence_start_ms": 1370,
+      "confirmation_from_first_correct_raw_ms": 314,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 34
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0006_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 61,
+      "duration_ms": 2028,
+      "confirmation_from_sequence_start_ms": 1247,
+      "confirmation_from_first_correct_raw_ms": 327,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 25
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0007_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 70,
+      "duration_ms": 2419,
+      "confirmation_from_sequence_start_ms": 1160,
+      "confirmation_from_first_correct_raw_ms": 315,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 33
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0008_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 37,
+      "duration_ms": 1282,
+      "confirmation_from_sequence_start_ms": 318,
+      "confirmation_from_first_correct_raw_ms": 318,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 28
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0009_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 41,
+      "duration_ms": 1371,
+      "confirmation_from_sequence_start_ms": 344,
+      "confirmation_from_first_correct_raw_ms": 344,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 31
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0010_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 34,
+      "duration_ms": 1083,
+      "confirmation_from_sequence_start_ms": 310,
+      "confirmation_from_first_correct_raw_ms": 310,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 24
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0011_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 98,
+      "duration_ms": 3571,
+      "confirmation_from_sequence_start_ms": 509,
+      "confirmation_from_first_correct_raw_ms": 318,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 82
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0012_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 86,
+      "duration_ms": 2903,
+      "confirmation_from_sequence_start_ms": 302,
+      "confirmation_from_first_correct_raw_ms": 302,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 76
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0013_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 98,
+      "duration_ms": 3125,
+      "confirmation_from_sequence_start_ms": 978,
+      "confirmation_from_first_correct_raw_ms": 978,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 52
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0014_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 77,
+      "duration_ms": 2600,
+      "confirmation_from_sequence_start_ms": 314,
+      "confirmation_from_first_correct_raw_ms": 314,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 68
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0015_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 81,
+      "duration_ms": 2677,
+      "confirmation_from_sequence_start_ms": 304,
+      "confirmation_from_first_correct_raw_ms": 304,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 73
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0016_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 74,
+      "duration_ms": 2482,
+      "confirmation_from_sequence_start_ms": 322,
+      "confirmation_from_first_correct_raw_ms": 322,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 65
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0017_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 418,
+      "duration_ms": 13781,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0018_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 293,
+      "duration_ms": 9990,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0019_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 440,
+      "duration_ms": 15167,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0020_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 282,
+      "duration_ms": 9554,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0021_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 291,
+      "duration_ms": 10141,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0022_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 307,
+      "duration_ms": 10347,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0023_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 384,
+      "duration_ms": 13924,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0024_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 339,
+      "duration_ms": 12283,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0025_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 378,
+      "duration_ms": 13236,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0026_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 253,
+      "duration_ms": 8315,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+control_gateway:
+  ros__parameters:
+    heartbeat_hz: 10.0
+    command_timeout_s: 0.5
+    forward_speed_mps: 0.8
+    horizontal_speed_mps: 0.8
+    vertical_speed_mps: 0.5
+    max_horizontal_speed_mps: 1.0
+    max_vertical_speed_mps: 0.7
+    yaw_rate_rad_s: 0.35
+    max_yaw_rate_rad_s: 0.6

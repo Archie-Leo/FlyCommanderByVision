@@ -1,0 +1,329 @@
+{
+  "sample_count": 6835,
+  "labels": [
+    "LEFT",
+    "RIGHT",
+    "ASCEND",
+    "DESCEND",
+    "HOVER",
+    "UNKNOWN",
+    "INVALID"
+  ],
+  "confusion_matrix": {
+    "LEFT": {
+      "LEFT": 251,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 266,
+      "INVALID": 207
+    },
+    "RIGHT": {
+      "LEFT": 0,
+      "RIGHT": 223,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 308,
+      "INVALID": 196
+    },
+    "ASCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 128,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 361,
+      "INVALID": 222
+    },
+    "DESCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 231,
+      "HOVER": 0,
+      "UNKNOWN": 311,
+      "INVALID": 200
+    },
+    "HOVER": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 222,
+      "UNKNOWN": 338,
+      "INVALID": 174
+    },
+    "UNKNOWN": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 5,
+      "HOVER": 0,
+      "UNKNOWN": 2182,
+      "INVALID": 1010
+    },
+    "INVALID": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    }
+  },
+  "per_gesture": {
+    "LEFT": {
+      "tp": 251,
+      "fp": 0,
+      "fn": 473,
+      "precision": 1.0,
+      "recall": 0.34668508287292815,
+      "support": 724
+    },
+    "RIGHT": {
+      "tp": 223,
+      "fp": 0,
+      "fn": 504,
+      "precision": 1.0,
+      "recall": 0.30674002751031637,
+      "support": 727
+    },
+    "ASCEND": {
+      "tp": 128,
+      "fp": 0,
+      "fn": 583,
+      "precision": 1.0,
+      "recall": 0.180028129395218,
+      "support": 711
+    },
+    "DESCEND": {
+      "tp": 231,
+      "fp": 5,
+      "fn": 511,
+      "precision": 0.9788135593220338,
+      "recall": 0.3113207547169811,
+      "support": 742
+    },
+    "HOVER": {
+      "tp": 222,
+      "fp": 0,
+      "fn": 512,
+      "precision": 1.0,
+      "recall": 0.3024523160762943,
+      "support": 734
+    }
+  },
+  "legal_action_rejection_rate": 0.7100054975261132,
+  "negative_sample_count": 3197,
+  "false_trigger_count": 5,
+  "false_triggers": [
+    {
+      "index": 5114,
+      "truth": "UNKNOWN",
+      "predicted": "DESCEND"
+    },
+    {
+      "index": 5115,
+      "truth": "UNKNOWN",
+      "predicted": "DESCEND"
+    },
+    {
+      "index": 5116,
+      "truth": "UNKNOWN",
+      "predicted": "DESCEND"
+    },
+    {
+      "index": 5117,
+      "truth": "UNKNOWN",
+      "predicted": "DESCEND"
+    },
+    {
+      "index": 5118,
+      "truth": "UNKNOWN",
+      "predicted": "DESCEND"
+    }
+  ],
+  "exact_accuracy": 0.4735918068763716,
+  "threshold_note": "Metrics are dataset measurements; no official universal PASS threshold is claimed.",
+  "sequences": [
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0001_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 218,
+      "duration_ms": 8410,
+      "confirmation_latency_ms": 2989,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0002_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 227,
+      "duration_ms": 8639,
+      "confirmation_latency_ms": 3535,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0003_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 279,
+      "duration_ms": 10323,
+      "confirmation_latency_ms": 4186,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0004_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 207,
+      "duration_ms": 7504,
+      "confirmation_latency_ms": 2723,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0005_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 239,
+      "duration_ms": 8692,
+      "confirmation_latency_ms": 3949,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0006_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 281,
+      "duration_ms": 10566,
+      "confirmation_latency_ms": 4575,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0007_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 217,
+      "duration_ms": 7830,
+      "confirmation_latency_ms": 3421,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0008_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 228,
+      "duration_ms": 8508,
+      "confirmation_latency_ms": 4050,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0009_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 266,
+      "duration_ms": 9860,
+      "confirmation_latency_ms": 4306,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0010_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 227,
+      "duration_ms": 8724,
+      "confirmation_latency_ms": 3317,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0011_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 250,
+      "duration_ms": 9268,
+      "confirmation_latency_ms": 3888,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0012_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 265,
+      "duration_ms": 9970,
+      "confirmation_latency_ms": 4348,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0013_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 228,
+      "duration_ms": 8681,
+      "confirmation_latency_ms": 3260,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0014_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 252,
+      "duration_ms": 9199,
+      "confirmation_latency_ms": 4409,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0015_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 254,
+      "duration_ms": 9749,
+      "confirmation_latency_ms": 4339,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0016_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 410,
+      "duration_ms": 14992,
+      "confirmation_latency_ms": null,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0017_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 98,
+      "duration_ms": 3452,
+      "confirmation_latency_ms": null,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0018_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 732,
+      "duration_ms": 28529,
+      "confirmation_latency_ms": null,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0019_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 595,
+      "duration_ms": 22446,
+      "confirmation_latency_ms": null,
+      "false_trigger_frames": 5
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0020_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 546,
+      "duration_ms": 19909,
+      "confirmation_latency_ms": null,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0021_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 534,
+      "duration_ms": 19873,
+      "confirmation_latency_ms": null,
+      "false_trigger_frames": 0
+    },
+    {
+      "path": "datasets/20260916_101001_UTC/sequence_0022_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 282,
+      "duration_ms": 11304,
+      "confirmation_latency_ms": null,
+      "false_trigger_frames": 0
+    }
+  ]
+}

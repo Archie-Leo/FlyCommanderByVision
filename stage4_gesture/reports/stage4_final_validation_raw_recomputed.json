@@ -1,0 +1,868 @@
+{
+  "sample_count": 6551,
+  "labels": [
+    "LEFT",
+    "RIGHT",
+    "ASCEND",
+    "DESCEND",
+    "HOVER",
+    "UNKNOWN",
+    "INVALID"
+  ],
+  "confusion_matrix": {
+    "LEFT": {
+      "LEFT": 498,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 434,
+      "INVALID": 168
+    },
+    "RIGHT": {
+      "LEFT": 0,
+      "RIGHT": 290,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 153,
+      "INVALID": 0
+    },
+    "ASCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 280,
+      "DESCEND": 5,
+      "HOVER": 0,
+      "UNKNOWN": 193,
+      "INVALID": 0
+    },
+    "DESCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 424,
+      "HOVER": 0,
+      "UNKNOWN": 181,
+      "INVALID": 10
+    },
+    "HOVER": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 470,
+      "UNKNOWN": 60,
+      "INVALID": 0
+    },
+    "UNKNOWN": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 1682,
+      "INVALID": 1703
+    },
+    "INVALID": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    }
+  },
+  "per_gesture": {
+    "LEFT": {
+      "tp": 498,
+      "fp": 0,
+      "fn": 602,
+      "precision": 1.0,
+      "recall": 0.4527272727272727,
+      "support": 1100
+    },
+    "RIGHT": {
+      "tp": 290,
+      "fp": 0,
+      "fn": 153,
+      "precision": 1.0,
+      "recall": 0.654627539503386,
+      "support": 443
+    },
+    "ASCEND": {
+      "tp": 280,
+      "fp": 0,
+      "fn": 198,
+      "precision": 1.0,
+      "recall": 0.5857740585774058,
+      "support": 478
+    },
+    "DESCEND": {
+      "tp": 424,
+      "fp": 5,
+      "fn": 191,
+      "precision": 0.9883449883449883,
+      "recall": 0.6894308943089431,
+      "support": 615
+    },
+    "HOVER": {
+      "tp": 470,
+      "fp": 0,
+      "fn": 60,
+      "precision": 1.0,
+      "recall": 0.8867924528301887,
+      "support": 530
+    }
+  },
+  "legal_action_rejection_rate": 0.37871130764371447,
+  "negative_sample_count": 3385,
+  "false_trigger_count": 0,
+  "false_triggers": [],
+  "exact_accuracy": 0.5562509540528163,
+  "threshold_note": "Metrics are dataset measurements; no official universal PASS threshold is claimed.",
+  "sequence_level": {
+    "per_gesture": {
+      "ASCEND": {
+        "support_sequences": 8,
+        "tp_sequences": 7,
+        "fp_sequences": 0,
+        "fn_sequences": 1,
+        "precision": 1.0,
+        "recall": 0.875,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 7,
+          "mean": 322.14285714285717,
+          "median": 319,
+          "p95": 339.79999999999995,
+          "max": 344
+        }
+      },
+      "DESCEND": {
+        "support_sequences": 8,
+        "tp_sequences": 7,
+        "fp_sequences": 1,
+        "fn_sequences": 1,
+        "precision": 0.875,
+        "recall": 0.875,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 7,
+          "mean": 404.7142857142857,
+          "median": 314,
+          "p95": 779.9999999999995,
+          "max": 978
+        }
+      },
+      "HOVER": {
+        "support_sequences": 7,
+        "tp_sequences": 7,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 7,
+          "mean": 314.2857142857143,
+          "median": 314,
+          "p95": 327.6,
+          "max": 330
+        }
+      },
+      "LEFT": {
+        "support_sequences": 8,
+        "tp_sequences": 8,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 8,
+          "mean": 325.625,
+          "median": 327.0,
+          "p95": 338.3,
+          "max": 339
+        }
+      },
+      "RIGHT": {
+        "support_sequences": 7,
+        "tp_sequences": 7,
+        "fp_sequences": 0,
+        "fn_sequences": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "confirmation_from_first_correct_raw_ms": {
+          "count": 7,
+          "mean": 322.7142857142857,
+          "median": 321,
+          "p95": 336.4,
+          "max": 340
+        }
+      }
+    },
+    "legal_sequence_count": 38,
+    "legal_sequence_success_rate": 0.9473684210526315,
+    "negative_sequence_count": 10,
+    "negative_false_trigger_sequence_count": 0,
+    "negative_false_trigger_sequence_rate": 0.0,
+    "negative_frame_count": 3385,
+    "negative_false_trigger_frame_count": 0,
+    "negative_false_trigger_frame_rate": 0.0
+  },
+  "frame_metric_note": "Top-level frame metrics include the operator's neutral/setup/transition interval. Use sequence_level for intended-gesture confirmation and false-trigger acceptance.",
+  "recomputed_with_current_code": true,
+  "sequences": [
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0001_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 308,
+      "duration_ms": 10703,
+      "confirmation_from_sequence_start_ms": 5496,
+      "confirmation_from_first_correct_raw_ms": 339,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 69
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0002_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 289,
+      "duration_ms": 10228,
+      "confirmation_from_sequence_start_ms": 7451,
+      "confirmation_from_first_correct_raw_ms": 330,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 23
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0003_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 173,
+      "duration_ms": 5720,
+      "confirmation_from_sequence_start_ms": 1773,
+      "confirmation_from_first_correct_raw_ms": 337,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 122
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0004_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 73,
+      "duration_ms": 2350,
+      "confirmation_from_sequence_start_ms": 305,
+      "confirmation_from_first_correct_raw_ms": 305,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 64
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0005_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 76,
+      "duration_ms": 2712,
+      "confirmation_from_sequence_start_ms": 1370,
+      "confirmation_from_first_correct_raw_ms": 314,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 34
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0006_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 61,
+      "duration_ms": 2028,
+      "confirmation_from_sequence_start_ms": 1247,
+      "confirmation_from_first_correct_raw_ms": 327,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 25
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0007_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 70,
+      "duration_ms": 2419,
+      "confirmation_from_sequence_start_ms": 1160,
+      "confirmation_from_first_correct_raw_ms": 315,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 33
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0008_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 37,
+      "duration_ms": 1282,
+      "confirmation_from_sequence_start_ms": 318,
+      "confirmation_from_first_correct_raw_ms": 318,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 28
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0009_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 41,
+      "duration_ms": 1371,
+      "confirmation_from_sequence_start_ms": 344,
+      "confirmation_from_first_correct_raw_ms": 344,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 31
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0010_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 34,
+      "duration_ms": 1083,
+      "confirmation_from_sequence_start_ms": 310,
+      "confirmation_from_first_correct_raw_ms": 310,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 24
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0011_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 98,
+      "duration_ms": 3571,
+      "confirmation_from_sequence_start_ms": 509,
+      "confirmation_from_first_correct_raw_ms": 318,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 82
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0012_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 86,
+      "duration_ms": 2903,
+      "confirmation_from_sequence_start_ms": 302,
+      "confirmation_from_first_correct_raw_ms": 302,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 76
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0013_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 98,
+      "duration_ms": 3125,
+      "confirmation_from_sequence_start_ms": 978,
+      "confirmation_from_first_correct_raw_ms": 978,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 52
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0014_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 77,
+      "duration_ms": 2600,
+      "confirmation_from_sequence_start_ms": 314,
+      "confirmation_from_first_correct_raw_ms": 314,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 68
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0015_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 81,
+      "duration_ms": 2677,
+      "confirmation_from_sequence_start_ms": 304,
+      "confirmation_from_first_correct_raw_ms": 304,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 73
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0016_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 74,
+      "duration_ms": 2482,
+      "confirmation_from_sequence_start_ms": 322,
+      "confirmation_from_first_correct_raw_ms": 322,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 65
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0017_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 418,
+      "duration_ms": 13781,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0018_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 293,
+      "duration_ms": 9990,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0019_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 440,
+      "duration_ms": 15167,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0020_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 282,
+      "duration_ms": 9554,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0021_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 291,
+      "duration_ms": 10141,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0022_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 307,
+      "duration_ms": 10347,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0023_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 384,
+      "duration_ms": 13924,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0024_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 339,
+      "duration_ms": 12283,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0025_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 378,
+      "duration_ms": 13236,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0026_UNKNOWN.jsonl",
+      "truth": "UNKNOWN",
+      "frames": 253,
+      "duration_ms": 8315,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": null,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0027_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 58,
+      "duration_ms": 2015,
+      "confirmation_from_sequence_start_ms": 321,
+      "confirmation_from_first_correct_raw_ms": 321,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 48
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0028_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 62,
+      "duration_ms": 2136,
+      "confirmation_from_sequence_start_ms": 324,
+      "confirmation_from_first_correct_raw_ms": 324,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 54
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0029_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 81,
+      "duration_ms": 2969,
+      "confirmation_from_sequence_start_ms": 316,
+      "confirmation_from_first_correct_raw_ms": 316,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 71
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0030_LEFT.jsonl",
+      "truth": "LEFT",
+      "frames": 56,
+      "duration_ms": 2053,
+      "confirmation_from_sequence_start_ms": 333,
+      "confirmation_from_first_correct_raw_ms": 333,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "LEFT": 47
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0031_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 51,
+      "duration_ms": 1839,
+      "confirmation_from_sequence_start_ms": 340,
+      "confirmation_from_first_correct_raw_ms": 340,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 41
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0032_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 67,
+      "duration_ms": 2415,
+      "confirmation_from_sequence_start_ms": 321,
+      "confirmation_from_first_correct_raw_ms": 321,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 59
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0033_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 61,
+      "duration_ms": 1985,
+      "confirmation_from_sequence_start_ms": 314,
+      "confirmation_from_first_correct_raw_ms": 314,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 51
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0034_RIGHT.jsonl",
+      "truth": "RIGHT",
+      "frames": 57,
+      "duration_ms": 1885,
+      "confirmation_from_sequence_start_ms": 328,
+      "confirmation_from_first_correct_raw_ms": 328,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "RIGHT": 47
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0035_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 58,
+      "duration_ms": 2083,
+      "confirmation_from_sequence_start_ms": 330,
+      "confirmation_from_first_correct_raw_ms": 330,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 51
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0036_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 41,
+      "duration_ms": 1324,
+      "confirmation_from_sequence_start_ms": 319,
+      "confirmation_from_first_correct_raw_ms": 319,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 31
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0037_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 63,
+      "duration_ms": 2017,
+      "confirmation_from_sequence_start_ms": 313,
+      "confirmation_from_first_correct_raw_ms": 313,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 53
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0038_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 72,
+      "duration_ms": 2358,
+      "confirmation_from_sequence_start_ms": 321,
+      "confirmation_from_first_correct_raw_ms": 321,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "ASCEND": 62
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0041_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 71,
+      "duration_ms": 2341,
+      "confirmation_from_sequence_start_ms": 314,
+      "confirmation_from_first_correct_raw_ms": 314,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 61
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0042_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 73,
+      "duration_ms": 2349,
+      "confirmation_from_sequence_start_ms": 303,
+      "confirmation_from_first_correct_raw_ms": 303,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 63
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0043_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 57,
+      "duration_ms": 2019,
+      "confirmation_from_sequence_start_ms": 302,
+      "confirmation_from_first_correct_raw_ms": 302,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 49
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0044_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 50,
+      "duration_ms": 1766,
+      "confirmation_from_sequence_start_ms": 316,
+      "confirmation_from_first_correct_raw_ms": 316,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 41
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0045_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 71,
+      "duration_ms": 2624,
+      "confirmation_from_sequence_start_ms": 301,
+      "confirmation_from_first_correct_raw_ms": 301,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 63
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0046_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 86,
+      "duration_ms": 2968,
+      "confirmation_from_sequence_start_ms": 318,
+      "confirmation_from_first_correct_raw_ms": 318,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 78
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0047_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 80,
+      "duration_ms": 2743,
+      "confirmation_from_sequence_start_ms": 330,
+      "confirmation_from_first_correct_raw_ms": 330,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 72
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/sequence_0048_HOVER.jsonl",
+      "truth": "HOVER",
+      "frames": 61,
+      "duration_ms": 1976,
+      "confirmation_from_sequence_start_ms": 311,
+      "confirmation_from_first_correct_raw_ms": 311,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "HOVER": 51
+      },
+      "confirmed_expected_label": true,
+      "wrong_stable_labels": {}
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/excluded/sequence_0039_ASCEND.jsonl",
+      "truth": "ASCEND",
+      "frames": 132,
+      "duration_ms": 4545,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {
+        "DESCEND": 5
+      },
+      "confirmed_expected_label": false,
+      "wrong_stable_labels": {
+        "DESCEND": 5
+      }
+    },
+    {
+      "path": "datasets/20260923_051541_UTC/excluded/sequence_0040_DESCEND.jsonl",
+      "truth": "DESCEND",
+      "frames": 82,
+      "duration_ms": 2982,
+      "confirmation_from_sequence_start_ms": null,
+      "confirmation_from_first_correct_raw_ms": null,
+      "false_trigger_frames": 0,
+      "stable_label_counts": {},
+      "confirmed_expected_label": false,
+      "wrong_stable_labels": {}
+    }
+  ]
+}

@@ -1,0 +1,414 @@
+{
+  "sample_count": 19,
+  "labels": [
+    "LEFT",
+    "RIGHT",
+    "ASCEND",
+    "DESCEND",
+    "HOVER",
+    "UNKNOWN",
+    "INVALID"
+  ],
+  "confusion_matrix": {
+    "LEFT": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    },
+    "RIGHT": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    },
+    "ASCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 1,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    },
+    "DESCEND": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    },
+    "HOVER": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 0
+    },
+    "UNKNOWN": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 12,
+      "INVALID": 0
+    },
+    "INVALID": {
+      "LEFT": 0,
+      "RIGHT": 0,
+      "ASCEND": 0,
+      "DESCEND": 0,
+      "HOVER": 0,
+      "UNKNOWN": 0,
+      "INVALID": 6
+    }
+  },
+  "per_gesture": {
+    "LEFT": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "support": 0
+    },
+    "RIGHT": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "support": 0
+    },
+    "ASCEND": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 1
+    },
+    "DESCEND": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "support": 0
+    },
+    "HOVER": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "support": 0
+    }
+  },
+  "legal_action_rejection_rate": 0.0,
+  "negative_sample_count": 18,
+  "false_trigger_count": 0,
+  "false_triggers": [],
+  "exact_accuracy": 1.0,
+  "threshold_note": "Metrics are dataset measurements; no official universal PASS threshold is claimed.",
+  "records": [
+    {
+      "line": 1,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00000199_20260915_051452_422709_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_outward",
+        "FAILED:right_wrist_outward"
+      ],
+      "group": "natural_center",
+      "notes": null
+    },
+    {
+      "line": 2,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00000405_20260915_051500_331094_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_outward",
+        "FAILED:right_wrist_outward"
+      ],
+      "group": "natural_center_repeat",
+      "notes": null
+    },
+    {
+      "line": 3,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00000972_20260915_051520_382694_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_outward",
+        "FAILED:right_wrist_outward"
+      ],
+      "group": "natural_image_right",
+      "notes": null
+    },
+    {
+      "line": 4,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00001132_20260915_051526_452180_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_outward",
+        "FAILED:right_wrist_outward"
+      ],
+      "group": "natural_image_left",
+      "notes": null
+    },
+    {
+      "line": 5,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00001528_20260915_051541_028323_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_outward",
+        "FAILED:right_wrist_outward"
+      ],
+      "group": "natural_near",
+      "notes": null
+    },
+    {
+      "line": 6,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00001698_20260915_051547_780444_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_outward",
+        "FAILED:right_wrist_outward"
+      ],
+      "group": "natural_near_repeat",
+      "notes": null
+    },
+    {
+      "line": 7,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00001870_20260915_051554_086630_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_outward",
+        "FAILED:right_wrist_outward"
+      ],
+      "group": "natural_mid",
+      "notes": null
+    },
+    {
+      "line": 8,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00002049_20260915_051600_788992_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_outward",
+        "FAILED:right_wrist_outward"
+      ],
+      "group": "natural_mid_repeat",
+      "notes": null
+    },
+    {
+      "line": 9,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00002251_20260915_051608_682550_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_outward",
+        "FAILED:right_wrist_outward"
+      ],
+      "group": "natural_far",
+      "notes": null
+    },
+    {
+      "line": 10,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00000919_20260915_090020_099779_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:LEFT",
+        "FAILED:left_outward_reach",
+        "FAILED:left_shoulder_height",
+        "FAILED:left_elbow_straight"
+      ],
+      "group": "single_left_arm_partial_transition",
+      "notes": "Not V1 LEFT: arm is bent and diagonal/up."
+    },
+    {
+      "line": 11,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00001119_20260915_090027_686395_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:RIGHT",
+        "FAILED:right_shoulder_height",
+        "FAILED:right_elbow_straight"
+      ],
+      "group": "single_right_arm_partial_transition",
+      "notes": "Not V1 RIGHT: arm is bent and diagonal/up."
+    },
+    {
+      "line": 12,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00001353_20260915_090036_175232_UTC.json",
+      "truth": "ASCEND",
+      "predicted": "ASCEND",
+      "score": 0.965692,
+      "reasons": [
+        "RULE_MATCH:ASCEND"
+      ],
+      "group": "both_arms_up",
+      "notes": null
+    },
+    {
+      "line": 13,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00001529_20260915_090042_756532_UTC.json",
+      "truth": "UNKNOWN",
+      "predicted": "UNKNOWN",
+      "score": 0.0,
+      "reasons": [
+        "NO_RULE_MATCH",
+        "NEAREST_RULE:DESCEND",
+        "FAILED:left_wrist_below_shoulder",
+        "FAILED:right_wrist_below_shoulder"
+      ],
+      "group": "reserved_t_pose",
+      "notes": "T-Pose is reserved for possible Stage 5 activation."
+    },
+    {
+      "line": 14,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00001846_20260915_090053_913458_UTC.json",
+      "truth": "INVALID",
+      "predicted": "INVALID",
+      "score": 0.0,
+      "reasons": [
+        "SOURCE_POSE_INVALID",
+        "MISSING_ARMS",
+        "MISSING_RIGHT_ELBOW",
+        "MISSING_RIGHT_WRIST"
+      ],
+      "group": "partial_arm_occlusion",
+      "notes": null
+    },
+    {
+      "line": 15,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00000430_20260915_093256_538559_UTC.json",
+      "truth": "INVALID",
+      "predicted": "INVALID",
+      "score": 0.0,
+      "reasons": [
+        "LOW_JOINT_CONFIDENCE:right_elbow",
+        "LOW_JOINT_CONFIDENCE:right_wrist"
+      ],
+      "group": "chair_occlusion_hard_negative",
+      "notes": null
+    },
+    {
+      "line": 16,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00000725_20260915_093307_091897_UTC.json",
+      "truth": "INVALID",
+      "predicted": "INVALID",
+      "score": 0.0,
+      "reasons": [
+        "SOURCE_POSE_INVALID",
+        "MISSING_ARMS",
+        "MISSING_RIGHT_ELBOW",
+        "MISSING_LEFT_WRIST",
+        "MISSING_RIGHT_WRIST",
+        "LOW_CONFIDENCE",
+        "HEAVY_TRUNCATION"
+      ],
+      "group": "heavy_truncation_1",
+      "notes": null
+    },
+    {
+      "line": 17,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00000893_20260915_093313_095929_UTC.json",
+      "truth": "INVALID",
+      "predicted": "INVALID",
+      "score": 0.0,
+      "reasons": [
+        "SOURCE_POSE_INVALID",
+        "MISSING_ARMS",
+        "MISSING_RIGHT_ELBOW",
+        "MISSING_LEFT_WRIST",
+        "MISSING_RIGHT_WRIST",
+        "LOW_CONFIDENCE",
+        "HEAVY_TRUNCATION"
+      ],
+      "group": "heavy_truncation_2",
+      "notes": null
+    },
+    {
+      "line": 18,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00001057_20260915_093319_346066_UTC.json",
+      "truth": "INVALID",
+      "predicted": "INVALID",
+      "score": 0.0,
+      "reasons": [
+        "SOURCE_POSE_INVALID",
+        "MISSING_ARMS",
+        "MISSING_RIGHT_ELBOW",
+        "MISSING_LEFT_WRIST",
+        "MISSING_RIGHT_WRIST",
+        "LOW_CONFIDENCE",
+        "HEAVY_TRUNCATION"
+      ],
+      "group": "heavy_truncation_3",
+      "notes": null
+    },
+    {
+      "line": 19,
+      "path": "/home/sentinel/drone_stage3_pose/outputs/snapshots/frame_00002572_20260915_051620_673519_UTC.json",
+      "truth": "INVALID",
+      "predicted": "INVALID",
+      "score": 0.0,
+      "reasons": [
+        "NO_NORMALIZED_SKELETON"
+      ],
+      "group": "no_person",
+      "notes": null
+    }
+  ]
+}

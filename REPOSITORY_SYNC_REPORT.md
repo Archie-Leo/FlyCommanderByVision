@@ -29,7 +29,9 @@ All tests used the existing NUC environments. No algorithm, dependency or operat
 
 Windows `gh` authentication was invalid; NUC `gh auth status` confirmed active account `Archie-Leo` with `repo` scope. Before push, the staged filenames and diff were reviewed, large/prohibited files checked, and case-insensitive TOKEN/SECRET/PASSWORD/PRIVATE KEY and higher-risk credential patterns scanned. The only generic TOKEN occurrence described an authorization token in prose; an exact numeric `123456` match came from an evaluation fraction, not a password. Existing source markdown has trailing-whitespace warnings in `git diff --check`; no source behavior was changed to normalize historical files.
 
-Git commit: **PENDING**. GitHub repository: **PENDING**. Visibility: **MUST VERIFY PRIVATE BEFORE PUSH**. Push status: **PENDING**. Working tree: **PENDING FINAL CHECK**.
+Initial consolidation commit: `e717dd4ffce807625bea3e994f099e16936191d4` (119 files). GitHub repository: `Archie-Leo/FlyCommanderByVision`, `https://github.com/Archie-Leo/FlyCommanderByVision`. Owner and visibility were queried both before and after the first push: **PRIVATE**. The `main` branch push succeeded; `git ls-remote` matched the local initial HEAD. GitHub API confirmed `README.md` and `PROJECT_STATUS.md` exist, the remote Stage 5 status says real multi-person Gate pending, and the remote tree contains no raw JSONL dataset, model `.task`, image/video, `.env` or `.ssh` path.
+
+This report is committed as a follow-up documentation update. After that push, verify final HEAD equality, PRIVATE visibility and a clean working tree once more; do not infer those final checks from the initial push alone.
 
 ## Current Stage status and limitations
 

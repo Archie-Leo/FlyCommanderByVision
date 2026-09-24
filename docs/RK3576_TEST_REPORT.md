@@ -16,6 +16,7 @@ All tests below were run on the Taishan Pi RK3576. No aircraft arm, Offboard ent
 | Gateway unit tests | PASS | `colcon test --packages-select drone_control_gateway`: **6 tests, 0 failures**. Package prefix and executable resolve. |
 | Camera left crop | PASS capture | Final 600/600 frames: **56.15 FPS steady** over 10.668 s; **50.80 FPS end-to-end** over 11.812 s including 0.973 s startup and 0.171 s shutdown. One old frame dropped, zero failures; capture thread exited. Prior supplied reference: 55.53 FPS. |
 | Camera full stereo | PASS capture | Final 600/600 frames at 2560×960 BGR: **54.33 FPS steady** over 11.025 s; **49.16 FPS end-to-end** over 12.205 s including 0.999 s startup and 0.181 s shutdown. Zero drops/failures; capture thread exited. |
+| Camera + Run B rectification | PASS visual pre-processing | 600/600 full-stereo frames with left-eye 1280×960 rectification: **57.85 FPS steady**, **52.20 FPS end-to-end**, mean `cv2.remap` **6.567 ms**. Zero drops/failures; calibration read-only. |
 | Camera latest-frame | PASS behavior | Final 30/30 frames with 100 ms simulated consumer delay; IDs 0–126, **97 dropped old frames**, zero failures; capture thread exited. |
 | Direct FFmpeg pipe comparison | OBSERVED | Same 640×480 left crop/scale, 600 requested frames to `dd` in 11.427 s (about 52.5 FPS end-to-end). |
 | NPU inference | PASS single check | `~/venvs/fcv/bin/python3 scripts/check_rk3576_rknn.py`: one MobileNet inference with shape `(1,224,224,3)` input returned one finite output of shape `(1,1001)`. No throughput measurement. |
@@ -30,6 +31,7 @@ Reproduce camera checks after `source scripts/env_rk3576.sh`:
 ```bash
 ~/venvs/fcv/bin/python3 scripts/benchmark_rk3576_camera.py --frames 600
 ~/venvs/fcv/bin/python3 scripts/benchmark_rk3576_camera.py --eye stereo --output-width 2560 --output-height 960 --frames 600
+~/venvs/fcv/bin/python3 scripts/benchmark_rk3576_camera.py --eye stereo --output-width 2560 --output-height 960 --frames 600 --rectify-left
 ~/venvs/fcv/bin/python3 scripts/benchmark_rk3576_camera.py --frames 30 --consumer-sleep 0.1
 ```
 

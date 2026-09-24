@@ -28,8 +28,10 @@ else
   status=1
 fi
 printf 'camera: %s\n' "$(test -e "${FCV_CAMERA_DEVICE:-/dev/video73}" && echo PRESENT || echo MISSING)"
+printf 'calibration: %s\n' "$(test -r "$FCV_CALIBRATION_PATH" && echo PRESENT || echo MISSING)"
 printf 'RKNN runtime: %s\n' "$(test -r /usr/lib/librknnrt.so && echo PRESENT || echo MISSING)"
 [[ -e "${FCV_CAMERA_DEVICE:-/dev/video73}" ]] || status=1
+[[ -r "$FCV_CALIBRATION_PATH" ]] || status=1
 [[ -r /usr/lib/librknnrt.so ]] || status=1
 if [[ -x "$HOME/venvs/fcv/bin/python3" ]]; then
   "$HOME/venvs/fcv/bin/python3" -c 'import cv2, numpy, rknnlite; print("vision Python: NumPy", numpy.__version__, "OpenCV", cv2.__version__)'

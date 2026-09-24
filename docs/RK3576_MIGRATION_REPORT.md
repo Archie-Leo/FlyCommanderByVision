@@ -17,7 +17,7 @@
 
 - ROS builds use `/usr/bin/python3` 3.12.3 with no active venv. The Gateway was rebuilt this way.
 - Vision uses `~/venvs/fcv/bin/python3` 3.12.3. On this session the actual imports were NumPy **2.5.3**, OpenCV **5.0.0**, and RKNN Lite2 2.3.2. This differs from the previously reported NumPy 1.26.4 / OpenCV 4.10.0. `pip list` also shows `opencv-python` 4.10.0.84 alongside `opencv-contrib-python` 5.0.0.93. No package was reinstalled during this session.
-- `source scripts/env_rk3576.sh` sets the ROS overlay, Stage3–6 `PYTHONPATH`, and RK3576 camera backend. Deactivate the vision venv before `colcon build`; verify `command -v python3` is `/usr/bin/python3`.
+- `source scripts/env_rk3576.sh` sets the ROS overlay, Stage3–6 `PYTHONPATH`, RK3576 camera backend, and repository Run B calibration path. Stage5/6 runner defaults use repository paths under this environment while the NUC defaults remain available without it. Deactivate the vision venv before `colcon build`; verify `command -v python3` is `/usr/bin/python3`.
 - `requirements-rk3576.txt` records imported vision versions. A clean installation from it has not yet been verified.
 
 ## 5. Camera implementation and 6. benchmark
@@ -70,7 +70,7 @@
 
 ## 14. Changes made
 
-- Added RK3576 environment and health scripts plus an observed dependency manifest.
+- Added RK3576 environment and health scripts, repository-relative runner defaults, and an observed dependency manifest.
 - Added a configurable FFmpeg latest-frame camera source and shared factory, preserving the NUC default and stereo API.
 - Added a camera benchmark command and ARM MediaPipe fail-closed guard.
 - Added RK3576-specific compatibility checks and a Stage6 evidence test runner.

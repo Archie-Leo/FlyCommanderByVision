@@ -5,7 +5,7 @@
 - 模块：Stage3 Pose inference；连带影响 Stage4/5/6 实时视觉证据。
 - 现象：已试的 MediaPipe 1.0.1 ARM64 wheel 在 PoseLandmarker 启动时因 LSE 指令缺失 SIGILL；本板 `/proc/cpuinfo` 的 `Features` 无 `atomics`。本仓库 `stage3_pose/models/pose_landmarker_full.task` 也不存在。
 - 根因：当前 MediaPipe wheel 与 RK3576 CPU ISA 不兼容；尚无完成 `PoseFrameV1`、质量和置信度映射验证的 RKNN Pose 模型。
-- 已尝试：保留原有 `PoseBackend` / MediaPipe backend、Normalize、`PoseFrame`；新增启动前 LSE 检查；Stage3 16 项逻辑测试通过。核对 Stage4 的六个肩/肘/腕关节及 Stage3 质量门所需髋部和置信度。
+- 已尝试：保留原有 `PoseBackend` / MediaPipe backend、Normalize、`PoseFrame`；新增启动前 LSE 检查；Stage3 17 项逻辑测试通过。核对 Stage4 的六个肩/肘/腕关节及 Stage3 质量门所需髋部和置信度。
 - 为什么停止：直接替换成常见 COCO 17 点模型会改变置信度、可见度与质量门语义；未证明它与现有手势安全拒绝逻辑等价。
 - 是否影响其他模块：不影响 Stage4–6 单元测试和 Gateway 构建；阻止真实视觉控制链运行。
 - 用户需要做什么：提供或选定可用于 RK3576 的 Pose 模型及来源；若要继续使用 NUC MediaPipe 模型，请提供原文件并按 `models/manifest.json` 校验 SHA256 `4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad`（仅供 NUC/兼容 CPU 使用）。

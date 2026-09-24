@@ -6,7 +6,7 @@ All tests below were run on the Taishan Pi RK3576. No aircraft arm, Offboard ent
 | --- | --- | --- |
 | Environment | PASS with dependency drift | `bash scripts/check_rk3576_environment.sh`: aarch64, Jazzy, px4_msgs, Gateway, Agent, camera node, RKNN runtime present; vision imports NumPy 2.5.3 / OpenCV 5.0.0. |
 | Python syntax | PASS | `/usr/bin/python3 -m compileall -q stage3_pose stage4_gesture stage5_operator stage6_closed_loop`. |
-| Stage3 | PASS logic / BLOCKED live | `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/venvs/fcv/bin/python3 -m pytest -q stage3_pose/tests`: **16 passed**, including camera filter geometry, subprocess cleanup, and no-LSE guard. No compatible live Pose backend. |
+| Stage3 | PASS logic / BLOCKED live | `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/venvs/fcv/bin/python3 -m pytest -q stage3_pose/tests`: **17 passed**, including camera filter geometry, subprocess cleanup, RK runner paths, and no-LSE guard. No compatible live Pose backend. |
 | Stage4 | PASS logic / BLOCKED live | Same pytest invocation for `stage4_gesture/tests`: **14 passed, 5 subtests passed**. No threshold or Unknown Reject change. |
 | Stage5 V1 | PASS logic / BLOCKED live input | `stage5_operator/tests/test_stage5.py`: **19 passed**. |
 | Stage5 V2 | PASS logic / BLOCKED native/model | Three `test_stage5_v2*.py` files: **78 passed**. Official OSNet checkpoint and native tracker missing. |

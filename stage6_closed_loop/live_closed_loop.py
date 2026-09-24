@@ -22,13 +22,14 @@ import cv2
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--stage3-root",type=Path,default=Path("~/drone_stage3_pose"))
-    p.add_argument("--stage4-root",type=Path,default=Path("~/drone_stage4_gesture"))
-    p.add_argument("--stage5-root",type=Path,default=Path("~/drone_stage5_operator"))
-    p.add_argument("--stage2-root",type=Path,default=Path("~/drone_stage2/stereo_depth_validation"))
-    p.add_argument("--calibration",type=Path,default=Path("~/drone_stage2/stereo_calibration/stereo_calibration_output/20260914_092939_UTC__run_B_exclude_0004_0027/calibration.yaml"))
-    p.add_argument("--boxmot-lib",type=Path,default=Path("~/drone_stage5_operator/build/botsort/botsort_capi.so"))
-    p.add_argument("--torchreid-root",type=Path,default=Path("~/drone_vision_refs/operator_lock/deep-person-reid"))
+    repo = Path(os.environ["REPO_ROOT"]) if "REPO_ROOT" in os.environ else None
+    p.add_argument("--stage3-root",type=Path,default=repo / "stage3_pose" if repo else Path("~/drone_stage3_pose"))
+    p.add_argument("--stage4-root",type=Path,default=repo / "stage4_gesture" if repo else Path("~/drone_stage4_gesture"))
+    p.add_argument("--stage5-root",type=Path,default=repo / "stage5_operator" if repo else Path("~/drone_stage5_operator"))
+    p.add_argument("--stage2-root",type=Path,default=repo / "stage2_stereo/depth_validation" if repo else Path("~/drone_stage2/stereo_depth_validation"))
+    p.add_argument("--calibration",type=Path,default=Path(os.environ["FCV_CALIBRATION_PATH"]) if "FCV_CALIBRATION_PATH" in os.environ else Path("~/drone_stage2/stereo_calibration/stereo_calibration_output/20260914_092939_UTC__run_B_exclude_0004_0027/calibration.yaml"))
+    p.add_argument("--boxmot-lib",type=Path,default=repo / "stage5_operator/build/botsort/botsort_capi.so" if repo else Path("~/drone_stage5_operator/build/botsort/botsort_capi.so"))
+    p.add_argument("--torchreid-root",type=Path,default=repo / "third_party/deep-person-reid" if repo else Path("~/drone_vision_refs/operator_lock/deep-person-reid"))
     p.add_argument("--osnet-checkpoint",type=Path,required=True)
     p.add_argument("--camera",default="/dev/video0")
     p.add_argument("--num-poses",type=int,default=4)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from dataclasses import replace
@@ -16,8 +17,9 @@ from stage5.types import DetectionV1
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Stage 5 visual-only operator ownership baseline")
-    parser.add_argument("--stage3-root", type=Path, default=Path("~/drone_stage3_pose"))
-    parser.add_argument("--stage4-root", type=Path, default=Path("~/drone_stage4_gesture"))
+    repo = Path(os.environ["REPO_ROOT"]) if "REPO_ROOT" in os.environ else None
+    parser.add_argument("--stage3-root", type=Path, default=repo / "stage3_pose" if repo else Path("~/drone_stage3_pose"))
+    parser.add_argument("--stage4-root", type=Path, default=repo / "stage4_gesture" if repo else Path("~/drone_stage4_gesture"))
     parser.add_argument("--camera", default="/dev/video0")
     parser.add_argument("--num-poses", type=int, default=4)
     parser.add_argument("--output", type=Path, default=Path("runs"))

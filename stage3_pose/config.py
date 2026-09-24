@@ -1,11 +1,13 @@
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 
-DEFAULT_CALIBRATION = Path.home() / (
+NUC_DEFAULT_CALIBRATION = Path.home() / (
     "drone_stage2/stereo_calibration/stereo_calibration_output/"
     "20260914_092939_UTC__run_B_exclude_0004_0027/calibration.yaml"
 )
+DEFAULT_CALIBRATION = Path(os.environ.get("FCV_CALIBRATION_PATH", str(NUC_DEFAULT_CALIBRATION)))
 DEFAULT_MODEL = Path(__file__).resolve().parent / "models/pose_landmarker_full.task"
 
 
@@ -51,4 +53,3 @@ class AppConfig:
     quality: QualityConfig = field(default_factory=QualityConfig)
     normalization: NormalizationConfig = field(default_factory=NormalizationConfig)
     calibration_path: Path = DEFAULT_CALIBRATION
-

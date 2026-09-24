@@ -5,6 +5,7 @@ export REPO_ROOT="$(cd "${_fcv_env_dir}/.." && pwd)"
 export FCV_ROS_WS="${FCV_ROS_WS:-$HOME/fcv_ros_ws}"
 export FCV_CAMERA_BACKEND="${FCV_CAMERA_BACKEND:-ffmpeg}"
 export FCV_CAMERA_DEVICE="${FCV_CAMERA_DEVICE:-/dev/video73}"
+export FCV_CALIBRATION_PATH="${FCV_CALIBRATION_PATH:-${REPO_ROOT}/configs/calibration/run_b.yaml}"
 
 if [[ ! -f /opt/ros/jazzy/setup.bash ]]; then
   echo 'ROS 2 Jazzy setup missing' >&2

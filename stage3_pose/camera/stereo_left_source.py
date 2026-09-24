@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import cv2
 import numpy as np
@@ -13,9 +14,11 @@ from config import CameraConfig
 class CameraFrame:
     frame_id: int
     timestamp_ns: int
-    raw_sbs: np.ndarray
-    left_raw: np.ndarray
+    raw_sbs: np.ndarray | None
+    left_raw: np.ndarray | None
     read_latency_ms: float
+    right_raw: np.ndarray | None = None
+    pixel_format: str = "bgr24"
 
 
 class StereoLeftSource:
@@ -58,3 +61,16 @@ class StereoLeftSource:
     def __exit__(self, exc_type, exc, traceback):
         self.release()
 
+
+def open_stereo_source(config: CameraConfig):
+    """Select the camera transport; preserve the original NUC default."""
+    backend = os.environ.get("FCV_CAMERA_BACKEND", "opencv").lower()
+    device = os.environ.get("FCV_CAMERA_DEVICE", config.device)
+    config = replace(config, device=device)
+    if backend == "opencv":
+        return StereoLeftSource(config)
+    if backend == "ffmpeg":
+        from .ffmpeg_source import FFmpegStereoSource
+
+        return FFmpegStereoSource.from_camera_config(config)
+    raise ValueError(f"Unknown FCV_CAMERA_BACKEND: {backend}")

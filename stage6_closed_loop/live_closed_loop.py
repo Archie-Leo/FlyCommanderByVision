@@ -65,7 +65,7 @@ def main():
     import rclpy
     from rclpy.signals import SignalHandlerOptions
     from rclpy.executors import SingleThreadedExecutor
-    from camera.stereo_left_source import StereoLeftSource
+    from camera.stereo_left_source import open_stereo_source
     from config import AppConfig,BackendConfig,CameraConfig
     from pose.mediapipe_backend import MediaPipePoseBackend
     from pose.normalize import SkeletonNormalizer
@@ -154,7 +154,7 @@ def main():
             time.sleep(.7)
             if bag_process.poll() is not None:
                 raise RuntimeError(f"rosbag startup failed; see {output/'rosbag_process.log'}")
-        with StereoLeftSource(config.camera) as camera, MediaPipePoseBackend(config.backend) as backend:
+        with MediaPipePoseBackend(config.backend) as backend, open_stereo_source(config.camera) as camera:
             while not args.max_frames or count < args.max_frames:
                 if spin_errors:
                     raise RuntimeError("ROS timer failed: "+spin_errors[0])

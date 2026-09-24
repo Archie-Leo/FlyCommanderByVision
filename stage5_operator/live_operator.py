@@ -62,7 +62,7 @@ def main():
     sys.path.insert(0, str(stage4))
     from stage5.pipeline import Stage5Pipeline
     from camera.rectification import LeftRectifier
-    from camera.stereo_left_source import StereoLeftSource
+    from camera.stereo_left_source import open_stereo_source
     from config import AppConfig, BackendConfig, CameraConfig
     from pose.mediapipe_backend import MediaPipePoseBackend
     from pose.normalize import SkeletonNormalizer
@@ -81,7 +81,7 @@ def main():
     failure = None
     with log_path.open("w", encoding="utf-8") as log_handle:
         try:
-            with StereoLeftSource(config.camera) as camera, MediaPipePoseBackend(config.backend) as backend:
+            with MediaPipePoseBackend(config.backend) as backend, open_stereo_source(config.camera) as camera:
                 while True:
                     camera_frame = camera.read()
                     rectified = rectifier.rectify(camera_frame.left_raw)

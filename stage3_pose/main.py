@@ -12,7 +12,7 @@ from pathlib import Path
 import cv2
 
 from camera.rectification import LeftRectifier
-from camera.stereo_left_source import StereoLeftSource
+from camera.stereo_left_source import open_stereo_source
 from config import AppConfig, BackendConfig, CameraConfig
 from countdown import CaptureCountdown
 from metrics import RuntimeMetrics
@@ -77,7 +77,7 @@ def main() -> int:
     started_utc = datetime.now(timezone.utc).isoformat()
 
     try:
-        with StereoLeftSource(config.camera) as camera, MediaPipePoseBackend(config.backend) as backend:
+        with MediaPipePoseBackend(config.backend) as backend, open_stereo_source(config.camera) as camera:
             while True:
                 loop_started = time.perf_counter_ns()
                 camera_frame = camera.read()

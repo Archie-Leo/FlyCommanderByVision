@@ -1,0 +1,11 @@
+# RK3576 vision runtime imports observed on 2026-09-25, Python 3.12.
+# This manifest records the active modules; a clean install has not been tested.
+# The existing fcv venv also contains opencv-python 4.10.0.84 metadata, which
+# conflicts with opencv-contrib-python and should not be installed alongside it.
+numpy==2.5.3
+opencv-contrib-python==5.0.0.93
+rknn-toolkit-lite2==2.3.2
+
+# ROS 2 Jazzy, px4_msgs and the Gateway come from apt/colcon, not this venv.
+# The current MediaPipe ARM64 wheel aborts with SIGILL (LSE) on this CPU.
+# Stage5 V2 native BoT-SORT and OSNet are tracked in RK3576_BLOCKERS.md.

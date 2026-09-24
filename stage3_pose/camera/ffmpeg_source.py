@@ -157,6 +157,10 @@ class FFmpegStereoSource:
                 return
             self._closed = True
             self._condition.notify_all()
+        # Close the read end first. FFmpeg may be blocked writing the next
+        # frame; waiting for it before closing the pipe costs the full timeout.
+        if self._process.stdout is not None:
+            self._process.stdout.close()
         if self._process.poll() is None:
             self._process.terminate()
         try:
@@ -165,8 +169,6 @@ class FFmpegStereoSource:
             self._process.kill()
             self._process.wait(timeout=2)
         self._thread.join(timeout=2)
-        if self._process.stdout is not None:
-            self._process.stdout.close()
 
     def __enter__(self):
         return self

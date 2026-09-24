@@ -14,10 +14,10 @@ All tests below were run on the Taishan Pi RK3576. No aircraft arm, Offboard ent
 | Stage6 Gate6C evidence | PASS mock/dry-run | `bash scripts/test_rk3576_gate6_evidence.sh`: **21 passed**. Test ROS publisher uses `/interaction/intent_dry_run`; no Gateway live run. |
 | Gateway build | PASS | `colcon build --packages-select drone_control_gateway --symlink-install`, system Python: one package finished in 1m02s. |
 | Gateway unit tests | PASS | `colcon test --packages-select drone_control_gateway`: **6 tests, 0 failures**. Package prefix and executable resolve. |
-| Camera left crop | PARTIAL performance | 600/600 frames, 13.960 s, **42.98 FPS**, zero failure/drop. Re-run with larger pipe buffer: 600/600, 14.189 s, **42.29 FPS**, eight dropped. Prior reported 55.53 FPS not met. |
-| Camera full stereo | PARTIAL performance | 120/120 frames, 5.323 s, **22.54 FPS**, zero failure/drop, 2560×960 BGR. |
-| Camera latest-frame | PASS behavior | 30/30 frames with 100 ms simulated consumer delay; IDs 0–166, **137 dropped old frames**, zero failures. |
-| Direct FFmpeg pipe comparison | OBSERVED | Same 640×480 left crop/scale, 600 requested frames to `dd` in 11.427 s (about 52.5 FPS); this isolates extra cost in the Python adapter path. |
+| Camera left crop | PASS capture | Final 600/600 frames: **56.15 FPS steady** over 10.668 s; **50.80 FPS end-to-end** over 11.812 s including 0.973 s startup and 0.171 s shutdown. One old frame dropped, zero failures; capture thread exited. Prior supplied reference: 55.53 FPS. |
+| Camera full stereo | PASS capture | Final 600/600 frames at 2560×960 BGR: **54.33 FPS steady** over 11.025 s; **49.16 FPS end-to-end** over 12.205 s including 0.999 s startup and 0.181 s shutdown. Zero drops/failures; capture thread exited. |
+| Camera latest-frame | PASS behavior | Final 30/30 frames with 100 ms simulated consumer delay; IDs 0–126, **97 dropped old frames**, zero failures; capture thread exited. |
+| Direct FFmpeg pipe comparison | OBSERVED | Same 640×480 left crop/scale, 600 requested frames to `dd` in 11.427 s (about 52.5 FPS end-to-end). |
 | NPU inference | PASS single check | `~/venvs/fcv/bin/python3 scripts/check_rk3576_rknn.py`: one MobileNet inference with shape `(1,224,224,3)` input returned one finite output of shape `(1,1001)`. No throughput measurement. |
 | Aircraft/PX4 live control | NOT USED | No Gateway/live pipeline launch, control topic publish, or parameter change. |
 
@@ -29,8 +29,8 @@ Reproduce camera checks after `source scripts/env_rk3576.sh`:
 
 ```bash
 ~/venvs/fcv/bin/python3 scripts/benchmark_rk3576_camera.py --frames 600
-~/venvs/fcv/bin/python3 scripts/benchmark_rk3576_camera.py --eye stereo --output-width 2560 --output-height 960 --frames 120
+~/venvs/fcv/bin/python3 scripts/benchmark_rk3576_camera.py --eye stereo --output-width 2560 --output-height 960 --frames 600
 ~/venvs/fcv/bin/python3 scripts/benchmark_rk3576_camera.py --frames 30 --consumer-sleep 0.1
 ```
 
-The Python benchmark includes FFmpeg startup and shutdown in elapsed time. Its CPU-seconds field measures only the Python process, not FFmpeg. Camera timestamps are host receipt times.
+Initial measurements before the shutdown fix included an approximately 2-second FFmpeg wait and misleading 22–43 FPS end-to-end values. Increasing Python pipe buffering did not help and was reverted. The benchmark reports both steady and end-to-end FPS; its CPU-seconds field measures only the Python process. Camera timestamps are host receipt times.

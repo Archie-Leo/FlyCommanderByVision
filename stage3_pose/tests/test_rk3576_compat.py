@@ -34,4 +34,5 @@ def test_ffmpeg_early_exit_closes_process():
         with pytest.raises(RuntimeError, match="FFmpeg camera stopped"):
             source.read(timeout=1)
     assert source._process.poll() is not None
+    assert not source._thread.is_alive()
     source.release()  # closing twice is safe

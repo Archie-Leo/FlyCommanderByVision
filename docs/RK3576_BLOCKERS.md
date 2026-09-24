@@ -33,17 +33,6 @@
 - 用户需要做什么：优先补齐上面的官方 checkpoint；确认是否可迁移原 NUC 所用 deep-person-reid、BoxMOT 精确版本或源码来源。ARM64 PyTorch 需要独立 `~/venvs/fcv_stage5`，不要覆盖 `fcv`。
 - 下一步命令/文件：先核对 `scripts/build_boxmot_native.sh` 和 `stage5_operator/stage5_v2/tracker.py` 的 ABI v2，再在 ARM64 上构建并验证 `.so`；PyTorch 只用可信 wheel，禁止从源码长时间编译。
 
-## BLOCKER_CAMERA_THROUGHPUT
-
-- 模块：RK3576 FFmpeg/V4L2 Python camera adapter。
-- 现象：左目 640×480 600 帧约 42–43 FPS，低于之前记录的 55.53 FPS；完整双目 2560×960 120 帧为 22.54 FPS。
-- 根因：FFmpeg 相同左目 crop/scale 直出到 `dd` 约 52.5 FPS，说明 Python pipe / 数据搬运 / 调度仍有额外成本；完整双目 BGR pipe 每帧约 7.37 MB。尚未细分这些开销。
-- 已尝试：无缓冲 600 帧 42.98 FPS；扩大 pipe 读缓冲 600 帧 42.29 FPS（无改善）；最新帧丢弃测试通过；未降低双目标定尺寸或质量门。
-- 为什么停止：现有数据不足以证明进一步调整线程/像素格式/硬件解码可保持原始 BGR 和标定语义。
-- 是否影响其他模块：不影响软件单测；限制未来完整视觉链频率。控制安全门不能直接以 Pose FPS 驱动。
-- 用户需要做什么：无需立即操作；如后续要求 60 FPS 全分辨率深度与记录，需要明确可接受的吞吐/延迟目标。
-- 下一步命令/文件：`scripts/benchmark_rk3576_camera.py`、`stage3_pose/camera/ffmpeg_source.py`；测量 FFmpeg 子进程 CPU、pipe read 系统调用及 BGR 转换，任何优化都要复测左/右语义和完整双目 1280×960 每眼几何。
-
 ## BLOCKER_VISION_ENVIRONMENT_DRIFT
 
 - 模块：`~/venvs/fcv` 复现性及 NPU 当前状态。

@@ -33,6 +33,7 @@ def main() -> None:
     received = 0
     failures = 0
     first_id = last_id = None
+    first_at = last_at = None
     with FFmpegStereoSource(config) as source:
         for _ in range(args.frames):
             try:
@@ -41,11 +42,15 @@ def main() -> None:
                 failures += 1
                 break
             received += 1
+            read_at = time.monotonic()
+            first_at = read_at if first_at is None else first_at
+            last_at = read_at
             first_id = frame.frame_id if first_id is None else first_id
             last_id = frame.frame_id
             if args.consumer_sleep:
                 time.sleep(args.consumer_sleep)
         dropped = source.dropped_frames
+        loop_ended = time.monotonic()
     elapsed = time.monotonic() - started
     cpu_end = resource.getrusage(resource.RUSAGE_SELF)
     cpu_seconds = (cpu_end.ru_utime + cpu_end.ru_stime
@@ -59,6 +64,12 @@ def main() -> None:
         "failures": failures,
         "elapsed_seconds": round(elapsed, 3),
         "effective_fps": round(received / elapsed, 2) if elapsed else 0,
+        "startup_seconds": round(first_at - started, 3) if first_at else None,
+        "read_window_seconds": round(last_at - first_at, 3) if first_at and last_at else None,
+        "steady_fps": round((received - 1) / (last_at - first_at), 2)
+                      if received > 1 and last_at > first_at else 0,
+        "shutdown_seconds": round(time.monotonic() - loop_ended, 3),
+        "capture_thread_alive_after_close": source._thread.is_alive(),
         "python_process_cpu_seconds": round(cpu_seconds, 3),
         "eye": args.eye,
         "output_size": [args.output_width, args.output_height],

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import platform
 import statistics
 import time
 from pathlib import Path
@@ -44,6 +45,18 @@ class MediaPipePoseBackend(PoseBackend):
     name = "mediapipe_pose_landmarker_full"
 
     def __init__(self, config: BackendConfig):
+        if platform.machine().lower() in {"aarch64", "arm64"}:
+            try:
+                cpuinfo = Path("/proc/cpuinfo").read_text(encoding="utf-8")
+            except OSError:
+                cpuinfo = ""
+            feature_lines = [line.split(":", 1)[1].split() for line in cpuinfo.splitlines()
+                             if line.lower().startswith("features") and ":" in line]
+            if not feature_lines or not all("atomics" in features for features in feature_lines):
+                raise RuntimeError(
+                    "MediaPipe ARM64 wheel requires LSE atomics absent on this CPU; "
+                    "pose inference needs a validated RK3576 backend"
+                )
         model_path = Path(config.model_path).expanduser().resolve()
         if not model_path.is_file():
             raise FileNotFoundError(f"MediaPipe model not found: {model_path}")
@@ -133,4 +146,3 @@ class MediaPipePoseBackend(PoseBackend):
         if getattr(self, "_landmarker", None) is not None:
             self._landmarker.close()
             self._landmarker = None
-

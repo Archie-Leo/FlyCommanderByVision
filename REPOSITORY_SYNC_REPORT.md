@@ -1,5 +1,10 @@
 # Repository Sync Report
 
+> This report records the earlier Stage 0–5 integration snapshot. The
+> follow-up added Stage 5 V2.2, Stage 6 Flight Authority, deployment scripts
+> and model/third-party manifests. Current status is in `PROJECT_STATUS.md`
+> and `docs/BASELINE_2026-09-24.md`.
+
 Date: 2026-09-24. This report covers the independent NUC integration copy; it does not replace the original Stage directories. Final GitHub verification is recorded below after push.
 
 ## Local source inventory and consolidated path

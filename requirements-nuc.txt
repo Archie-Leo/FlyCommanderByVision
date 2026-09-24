@@ -1,0 +1,9 @@
+# Verified NUC x86_64 / Ubuntu 22.04 / Python 3.10 top-level Python stack.
+# Create a fresh venv; do not upgrade NumPy to 2.x for this frozen baseline.
+numpy==1.26.4
+opencv-contrib-python==4.10.0.84
+mediapipe==1.0.1
+# PyTorch 2.5.1+cpu is installed separately from the official CPU wheel index:
+# python -m pip install 'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+# rclpy, px4_msgs and drone_control_gateway are supplied by ROS 2/colcon,
+# not PyPI. BoxMOT native C++ and deep-person-reid are pinned source builds.

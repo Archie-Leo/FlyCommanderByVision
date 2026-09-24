@@ -12,11 +12,127 @@
 - Stage 2：PASS（2026-09-14）；双目采集、标定、校正、视差、Q→3D 与 0.5–2.5 m 静态测距闭环已实测
 - Stage 3：PASS / V1 FROZEN（2026-09-15）
 - Stage 4：PASS / Gesture V1 FROZEN（2026-09-23；操作员确认两段目标动作录制错误，原始诊断保留）
-- Stage 5：视觉基线已实现，**真人多人 Gate 待验证**；Tracking + Operator Lock + Unknown Reject，不接飞控
-- Stage 6–9：NOT STARTED
+- Stage 5 V2.2：**SINGLE-OPERATOR DEMO BASELINE PASS / FULL MULTI-PERSON SAFETY VALIDATION DEFERRED TO STAGE 7**；单人真人出画后自动重新授权 4/4 成功，且每次创建 NEW Session；不将双人安全 Gate 写成 PASS
+- Stage 6：**IN PROGRESS**；Gate 6A PASS、真人五手势及安全项 Gate 6B PASS；Safety Pilot Flight Authority Gate 已加入、65/65 测试 PASS；Gate 6C **证据系统 READY / 正式五动作仍 NOT STARTED**，须按新权限逻辑完整重测；Gate 6D 未启动
+- Stage 7–9：NOT STARTED
 - PRE-STAGE-5 Operator Ownership 开源源码审计：COMPLETE
 - 当前开发默认标定：Run B（显式排除 pair 4/27；原始 captures 完整保留），状态为 `DEVELOPMENT/PROVISIONAL`
 - 当前边界：Stage 4 不补采、不调参；Stage 5 仅实现视觉安全链，不进入 ROS2/PX4/Gazebo 或真机闭环
+
+2026-09-24 单操作手 Demo 主线正式收口并启动 Stage 6：Stage 5 V2.2 最近
+真人片段 `runs_v2/20260924_105951_UTC/recordings/clip_001` 中，首次
+T-Pose 授权后四次完整 `OPERATOR_LOST → AUTO_REAUTHORIZE_CONFIRMING →
+LOCKED_HIGH` 均建立不同新 Session；36 帧确认期间 Authorized=NO、Gallery
+无写入，成功当帧无旧 Gesture。该片段仅一人，合法手势授权次数为 0，
+四次成功时 stereo depth 不可用；因此仅认定**单操作手 Demo 基线 PASS**，
+不认定旁人冒领/交叉/同衣服等完整安全 Gate。上述事项迁至 Stage 7。
+
+Stage 6 独立工程位于 NUC `~/drone_stage6_closed_loop`，Windows 算法/文档
+镜像 `D:\FlyCommanderByVision\drone_stage6_closed_loop`。已核实冻结
+`Intent.msg` 与可靠 QoS `/interaction/intent`；新增仅消费
+`AuthorizedGestureV1` 的映射/300 ms 租约、20 Hz ROS 定时发布节点和独立视觉入口。
+默认只发 `/interaction/intent_dry_run`，未接 Gateway/PX4/Gazebo。
+Gate 6A 27/27 deterministic tests PASS；隔离 ROS 传输收到有效 MOVE_LEFT
+及视觉停止后的无效 HOVER；真实相机空场 20 帧、66 条 Intent 事件均为安全
+HOVER。第一次 dry-run 暴露日志文件关闭顺序问题，已修复并重测；当前待
+真人 Gate 6B 五手势及拒绝路径已通过隔离 dry-run 验证。超时输入在
+329 ms 收到 `HOVER valid=false / VISION_COMMAND_TIMEOUT`；SIGINT 后 ROS
+最后一条是 `HOVER valid=false / VISION_STOPPED`，无重复 shutdown；坏相机
+路径仍 fail-closed。29/29 Stage 6 测试 PASS。Gate 6C 尚未启动，未接
+Gateway/PX4/Gazebo。详见 Stage 6 的设计与验证报告。
+
+2026-09-24 Gate 6C 证据系统准备：NUC `~/drone_stage6_closed_loop` 新增
+`--record`/`R` 标注 AVI、同 Run 下的视觉/Intent/Gateway/PX4 JSONL、
+`run_manifest.json`、动态 topic 旁路 observer、`--rosbag` 与保守离线分析。
+统一 `t0_monotonic_ns`/`run_elapsed_ms`；保留 PX4 source timestamp 原值，
+不假定其与主机 monotonic 同域。20 帧真实相机 dry-run 的 AVI/JSONL
+逐帧对齐；合成 RIGHT Run 的 16 条有效 Intent 与 16 条旁路接收一致，
+并明确标记 `test_injection`，不得用于真人/飞行 PASS。PX4/Gazebo
+observer-only smoke 仍用 `/interaction/intent_dry_run`：实际订阅
+`/fmu/out/vehicle_local_position_v1`（403 条）和
+`/fmu/out/vehicle_status_v1`（16 条）；rosbag 相应录得 293/12 条，
+PX4 未武装且无 Gateway setpoint 发布。Stage 6 `compileall` 与
+**51/51 tests PASS**；自动分析结果均为 `INSUFFICIENT_EVIDENCE`，
+Gate 6C 飞行响应测试尚未开始。没有修改 Stage 1/3/4/5。
+
+2026-09-24 Gate 6C 正式测试 Preflight：NUC 相机 `/dev/video0` 可读取
+2560×960 原始帧，OSNet checkpoint 成功加载；ROS Humble、XRCE Agent、
+Gazebo X500 SITL、Gateway 和真实 PX4 位置/状态 topic 均正常。Gateway 是
+`/interaction/intent` 唯一 subscriber、`/fmu/in/trajectory_setpoint` 唯一
+ROS publisher。磁盘剩余约 326 GB。预检 Run
+`~/drone_stage6_closed_loop/runs/20260924_135943_UTC/` 仍在
+`/interaction/intent_dry_run`：20 帧 AVI、四份日志及 rosbag 均完整，
+101 条 Gateway trajectory setpoint 全部为零，分析为
+`INSUFFICIENT_EVIDENCE`。但 PX4 控制台持续报告
+`Preflight Fail: No connection to the GCS`，且真人在相机前监护/动作尚未确认；
+依本轮“一项失败即停止”规则，未 ARM、未 TAKEOFF、未切 Offboard、未使用
+`--allow-live-output`。临时 Gateway、PX4/Gazebo、Agent 已关闭。
+正式五动作飞行响应没有执行，Gate 6C 不得标 PASS/FAIL；待 GCS 与真人监护
+就绪后重新从完整 Preflight 开始。
+
+2026-09-24 Safety Pilot/Offboard 权限修正：只改 Stage 6。真实 PX4
+`VehicleStatus` 的 armed+Offboard+非 failsafe 且状态新鲜，才有 Flight
+Authority；Offboard 退出/失效只清 Stage 6 Motion Lease，不更改 Stage 5
+Session/Gallery。重新进入 Offboard 必须先观察同一可信操作手的稳定中性释放，
+再接收新的合法手势；持续保持旧 RIGHT 不会自动恢复 MOVE_RIGHT。
+新增 14 项测试，Stage 6 **65/65 PASS**。NUC 随后 `/dev/video*` 不存在，
+故本轮新版真实相机 smoke 未完成；未启动 Gate 6C 飞行验证。
+
+2026-09-24 Stage 5 V2.2 实验功能：在保留首次 T-Pose、V2.1 短期同 Session
+重获和旧的 T-Pose 重新授权前提下，新增默认关闭的完整 `OPERATOR_LOST` 后
+安全自动重新授权。`--auto-reauthorize` 才显式启用；旧 OSNet Gallery 多样本
+max/top-3/count、长期候选融合分数、hard gates、候选竞争和 8 帧/700 ms 的
+RED 确认全部通过才建立 **NEW Session**，旧 Session/旧 Gesture 不复活。
+旧 Gallery 在失锁和确认阶段只读。NUC V1+V2 自动测试 **97/97 PASS**，
+`/dev/video0` 空场 20 帧 PASS（零误授权、新 JSON 字段完整）。最新旧录像
+`20260924_084846_UTC` 日志驱动分析：134 帧 LOST 候选检查中，ReID
+≥0.94 为 54 帧，最长连续 17 帧/2472 ms；加入 crop≥0.75 与 pose valid
+后最长 15 帧/2177 ms。旧日志缺少新 Top-K/长期融合数据，**不能据此声称
+真人自动恢复已成功**。旁人和同衣服冒名风险未实测；Gate NOT PASSED，
+Stage 6 NOT STARTED。详细参数、reject reason 与下一轮最小真人 Gate 见
+`drone_stage5_operator/STAGE5_DESIGN_V2.md` 和
+`drone_stage5_operator/STAGE5_VALIDATION_REPORT_V2.md`。
+
+2026-09-24 Stage 5 V2.1 定向修复：真人录像 `clip_002` 的多人交叉显示，
+原操作手 track 3 在旧 RED grace 到期前已重新出现，身份综合分数
+0.949/0.940/0.941、hard gates 通过，却在 5 帧确认尚未完成时被旧
+1100 ms 计时判为 LOST。现新增 RED、不可授权的 `REACQUIRE_CONFIRMING`：
+5 帧且 ≥400 ms，单次确认窗口 900 ms，首次 RED 起总体上限 2000 ms；
+普通 RED 仍维持 1100 ms，候选失败不能无限续命。已记录逐帧计时/候选/
+状态转移字段。NUC V1+V2 合成及旧录像日志切片回归 **68/68 PASS**；
+20 帧空场相机冒烟 PASS。旧录像只证明帧 405 不应被提前判 LOST，
+后续原始候选分数缺失，真人后修复效果仍待验证。0.90 身份阈值、
+OSNet、BoT-SORT、Evidence 权重、Stage 3/4 均未改；Stage 5 Gate
+**NOT PASSED**，Stage 6 **NOT STARTED**。
+
+2026-09-24 真人录像与对应 JSONL 首约 75 秒复核：1553 帧中 `LOCKED_HIGH`
+520 帧、`LOST` 751 帧、`REACQUIRING` 113 帧；两人同帧 68 帧，
+`AuthorizedGestureV1.valid=true` 为 0。T-Pose 首次授权、同一 Session 跨临时
+track ID 2/4/5 重获及 fail-closed 有证据；频繁失锁表明身份底座不足。
+操作手合法 Gesture YES 与旁人合法 Gesture NO 尚未完成真人对照，禁止把 Stage 5 写 PASS。
+
+2026-09-24 V2 进展：独立 `stage5_v2` / `live_operator_v2.py` 已实现 BoxMOT
+native BoT-SORT adapter、OSNet 接口、Run B 人体躯干深度、多证据可靠度融合、
+hard gates、候选竞争、RED/GREEN/YELLOW/GRAY 状态与 Gallery 防污染；
+NUC 上 V2 安全合成测试 22/22（新增录制测试 3/3；全套 44/44）、BoT-SORT ABI 冒烟通过。原生 BoT-SORT 参考 commit
+`8576283`，AGPL-3.0；OSNet 来自 deep-person-reid `f8cd150`，目标为 x0.25
+MSMT17、512-D。NUC 独立 `~/venvs/drone_stage5_v2` 已装 PyTorch 2.5.1+cpu，
+OSNet 架构前向输出 `(1,512)` 已验证。随后操作员提供训练 checkpoint，
+`~/FlyCommanderByVision/models/reid/osnet_x0_25_msmt17.pth`（SHA256
+`cf55163d78fc44c62c82f85ab62d39f10438679b5abe8c698ae08cfa84aa6e18`），
+已安全加载并对合成 crop 输出单位范数 512-D embedding。V2 可以运行，
+真人首次授权已有录制证据，但失锁后重新授权、近距离稳定性与多人授权
+仍未通过后修复版本的真人 Gate，不能 PASS。
+Stage 2 SGBM 单项六帧耗时中位约 77.1 ms；需先 profile 全链路，再做真人复测。
+
+2026-09-24 诊断录制：V1/V2 可视化入口均支持 `R` 开始/停止片段，
+`--record` 无界面自动录制，按需 `--record-raw-stereo` 保存同帧 SBS 无损 PNG；
+带标注 MJPG、逐帧完整 JSONL、manifest 与真实 monotonic 时间戳落在每次
+run 的 `recordings/clip_XXX/`。NUC V1 实机 2 帧录制并读回通过；
+新增 3 项录制测试后 V1+V2 回归 44/44。V2 权重到位后，NUC 空场
+2 帧原始 SBS+标注录像对齐读回、12 帧标注录像对齐读回通过；
+后者 capture 时间戳中位间隔约 9.79 FPS，深度/Stage 5 阶段中位
+73.7/74.9 ms（**空场，没有人像 OSNet 推理**）。Gate 不变。
 
 ## 正式运行环境（远端 NUC）
 

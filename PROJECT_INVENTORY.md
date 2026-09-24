@@ -1,5 +1,10 @@
 # Project source inventory
 
+> Historical consolidation snapshot. The current repository now also
+> includes Stage 5 V2.2 `stage5_v2/` and Stage 6 `stage6_closed_loop/`;
+> see `README.md`, `PROJECT_STATUS.md` and `docs/BASELINE_2026-09-24.md`.
+> The older V1-only Stage 5 status below is not current.
+
 Audited 2026-09-24 against `sentinel-S600` and the accessible Windows workspace. This inventory precedes integration copying. Paths below are original NUC directories; none are to be moved or deleted.
 
 | Source path | Component / Stage | Ownership | Integration action | Large or sensitive material | Verified status |

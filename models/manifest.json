@@ -1,0 +1,24 @@
+{
+  "schema_version": "FlyCommanderByVisionModelsV1",
+  "models": [
+    {
+      "name": "mediapipe_pose_landmarker_full",
+      "filename": "pose_landmarker_full.task",
+      "repo_path": "stage3_pose/models/pose_landmarker_full.task",
+      "source": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
+      "sha256": "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad",
+      "redistribution": "not verified; download from upstream"
+    },
+    {
+      "name": "osnet_x0_25_msmt17",
+      "filename": "osnet_x0_25_msmt17.pth",
+      "repo_path": "models/reid/osnet_x0_25_msmt17.pth",
+      "source_page": "https://github.com/KaiyangZhou/deep-person-reid/blob/master/docs/MODEL_ZOO.md",
+      "source": "https://drive.google.com/file/d/1Kkx2zW89jq_NETu4u42CFZTMVD5Hwm6e/view?usp=sharing",
+      "google_drive_id": "1Kkx2zW89jq_NETu4u42CFZTMVD5Hwm6e",
+      "size_bytes_observed": 9336983,
+      "sha256": "cf55163d78fc44c62c82f85ab62d39f10438679b5abe8c698ae08cfa84aa6e18",
+      "redistribution": "not verified; download from upstream"
+    }
+  ]
+}

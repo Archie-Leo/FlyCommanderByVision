@@ -174,7 +174,9 @@ def run_camera(args, state: PreviewState, server: ThreadingHTTPServer):
                 started = time.perf_counter()
                 camera_frame = camera.read()
                 rectified = rectifier.rectify(camera_frame.left_raw)
-                pose_frame = backend.infer(rectified, camera_frame.timestamp_ns // 1_000_000,
+                analysis_frame = (cv2.rotate(rectified, cv2.ROTATE_180)
+                                  if args.input_rotate_180 else rectified)
+                pose_frame = backend.infer(analysis_frame, camera_frame.timestamp_ns // 1_000_000,
                                            camera_frame.frame_id)
                 pose = pose_frame.poses[0] if pose_frame.poses else None
                 quality = quality_evaluator.evaluate(pose)
@@ -188,7 +190,7 @@ def run_camera(args, state: PreviewState, server: ThreadingHTTPServer):
                 fps = 1.0 / statistics.fmean(intervals) if intervals else 0.0
                 total_ms = (now - started) * 1000
                 dropped = getattr(camera, "dropped_frames", 0)
-                overlay = draw_panel(rectified, pose, quality, raw, stable, fps,
+                overlay = draw_panel(analysis_frame, pose, quality, raw, stable, fps,
                                      pose_frame.inference_latency_ms, total_ms,
                                      dropped, args.display_mirror, args.display_width)
                 ok, encoded = cv2.imencode(".jpg", overlay,
@@ -224,6 +226,8 @@ def main():
     parser.add_argument("--model", type=Path, default=None)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--input-rotate-180", action="store_true",
+                        help="Rotate rectified analysis frame by 180 degrees before Pose inference.")
     parser.add_argument("--display-mirror", action="store_true")
     parser.add_argument("--display-width", type=int, default=960,
                         help="Final display width only; inference remains at calibrated resolution")

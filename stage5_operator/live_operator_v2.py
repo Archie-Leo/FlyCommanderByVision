@@ -22,9 +22,12 @@ def args_parser():
     p.add_argument("--stage2-root", type=Path, default=repo / "stage2_stereo/depth_validation" if repo else Path("~/drone_stage2/stereo_depth_validation"))
     p.add_argument("--calibration", type=Path, default=Path(os.environ["FCV_CALIBRATION_PATH"]) if "FCV_CALIBRATION_PATH" in os.environ else Path("~/drone_stage2/stereo_calibration/stereo_calibration_output/20260914_092939_UTC__run_B_exclude_0004_0027/calibration.yaml"))
     p.add_argument("--boxmot-lib", type=Path, default=repo / "stage5_operator/build/botsort/botsort_capi.so" if repo else Path("~/drone_stage5_operator/build/botsort/botsort_capi.so"))
-    p.add_argument("--torchreid-root", type=Path, default=repo / "third_party/deep-person-reid" if repo else Path("~/drone_vision_refs/operator_lock/deep-person-reid"))
-    p.add_argument("--osnet-checkpoint", type=Path, required=True)
-    p.add_argument("--camera", default="/dev/video0")
+    p.add_argument("--torchreid-root", type=Path, default=Path(os.environ["FCV_TORCHREID_ROOT"]) if "FCV_TORCHREID_ROOT" in os.environ else repo / "third_party/deep-person-reid" if repo else Path("~/drone_vision_refs/operator_lock/deep-person-reid"))
+    p.add_argument("--osnet-checkpoint", type=Path, default=repo / "models/reid/osnet_x0_25_msmt17.pth" if repo else None)
+    p.add_argument("--reid-backend", choices=("torch", "rknn"), default=os.environ.get("FCV_REID_BACKEND", "torch"))
+    p.add_argument("--rknn-osnet-model", type=Path, default=repo / "models/reid/rk3576/osnet_x0_25_msmt17_fp16.rknn" if repo else None)
+    p.add_argument("--rknn-osnet-sha256", default=None, help="expected RKNN model SHA256; default is the validated RK3576 artifact")
+    p.add_argument("--camera", default=os.environ.get("FCV_CAMERA_DEVICE", "/dev/video0"))
     p.add_argument("--num-poses", type=int, default=4)
     p.add_argument("--output", type=Path, default=Path("runs_v2"))
     p.add_argument("--record", action="store_true", help="start an annotated diagnostic clip at launch")
@@ -116,15 +119,32 @@ def main():
     from stage5_v2.pipeline import Stage5PipelineV2
     from stage5_v2.ownership import Settings
     from stage5_v2.reid import OSNetEmbedder
+    from stage5_v2.reid_rknn import RKNNOSNetEmbedder, VALIDATED_RK3576_SHA256
     from stage5_v2.recording import DiagnosticRecorder
     from stage5_v2.tracker import BotSortTrackerAdapter
 
     # Initialize all authority-bearing dependencies before opening the camera.
-    embedder = OSNetEmbedder(args.osnet_checkpoint, args.torchreid_root)
-    depth = StereoPersonDepthAdapter(args.calibration, args.stage2_root)
-    tracker = BotSortTrackerAdapter(args.boxmot_lib)
-    pipeline = Stage5PipelineV2(tracker, embedder, depth,
-                                ownership_settings=Settings(auto_reauthorize_enabled=args.auto_reauthorize))
+    if args.reid_backend == "rknn":
+        if args.rknn_osnet_model is None:
+            raise ValueError("--rknn-osnet-model is required for RKNN backend")
+        embedder = RKNNOSNetEmbedder(args.rknn_osnet_model,
+                                    expected_sha256=args.rknn_osnet_sha256 or VALIDATED_RK3576_SHA256)
+    else:
+        if args.osnet_checkpoint is None:
+            raise ValueError("--osnet-checkpoint is required for Torch backend")
+        embedder = OSNetEmbedder(args.osnet_checkpoint, args.torchreid_root)
+    try:
+        depth = StereoPersonDepthAdapter(args.calibration, args.stage2_root)
+        tracker = BotSortTrackerAdapter(args.boxmot_lib)
+        try:
+            pipeline = Stage5PipelineV2(tracker, embedder, depth,
+                                        ownership_settings=Settings(auto_reauthorize_enabled=args.auto_reauthorize))
+        except BaseException:
+            tracker.close()
+            raise
+    except BaseException:
+        embedder.close()
+        raise
     config = AppConfig(camera=replace(CameraConfig(),device=args.camera),
                        backend=replace(BackendConfig(),num_poses=args.num_poses))
     evaluator = PoseQualityEvaluator(config.quality)
@@ -151,7 +171,10 @@ def main():
                         rectified_left=rectified_left)
                     record["camera_device"] = args.camera
                     record["calibration_path"] = str(depth.calibration_path)
-                    record["osnet_checkpoint_sha256"] = embedder.sha256
+                    record["reid_backend"] = args.reid_backend
+                    record["reid_model_sha256"] = embedder.sha256
+                    if args.reid_backend == "torch":
+                        record["osnet_checkpoint_sha256"] = embedder.sha256
                     record["pose_inference_latency_ms"] = pose_frame.inference_latency_ms
                     record["capture_monotonic_ns"] = frame.timestamp_ns
                     record["capture_wall_time_utc"] = capture_wall_time_utc
@@ -167,7 +190,10 @@ def main():
                             "camera_device": args.camera,
                             "source_runner": "live_operator_v2.py",
                             "calibration_path": str(depth.calibration_path),
-                            "osnet_checkpoint_sha256": embedder.sha256,
+                            "reid_backend": args.reid_backend,
+                            "reid_model_sha256": embedder.sha256,
+                            **({"osnet_checkpoint_sha256": embedder.sha256}
+                               if args.reid_backend == "torch" else {}),
                             "num_poses": args.num_poses,
                             "raw_sbs_size": [frame.raw_sbs.shape[1], frame.raw_sbs.shape[0]],
                         })
@@ -193,12 +219,14 @@ def main():
     finally:
         recorder.stop(reason="ERROR" if failure else "RUN_EXIT")
         tracker.close()
+        embedder.close()
         cv2.destroyAllWindows()
     elapsed = max(1e-6,time.perf_counter()-started)
     summary = {"status":"ERROR_FAIL_CLOSED" if failure else "VISUAL_ONLY_RUN_COMPLETE",
                "frames":count,"fps":count/elapsed,"elapsed_s":elapsed,"error":failure,
                "log_path":str(log_path),"recordings":recorder.clips,
-               "no_ros2_px4_output":True}
+               "no_ros2_px4_output":True,
+               "reid_backend":args.reid_backend,"reid_model_sha256":embedder.sha256}
     (output/"summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary))
     return 1 if failure else 0

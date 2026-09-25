@@ -6,6 +6,8 @@ export FCV_ROS_WS="${FCV_ROS_WS:-$HOME/fcv_ros_ws}"
 export FCV_CAMERA_BACKEND="${FCV_CAMERA_BACKEND:-ffmpeg}"
 export FCV_CAMERA_DEVICE="${FCV_CAMERA_DEVICE:-/dev/video73}"
 export FCV_CALIBRATION_PATH="${FCV_CALIBRATION_PATH:-${REPO_ROOT}/configs/calibration/run_b.yaml}"
+export FCV_REID_BACKEND="${FCV_REID_BACKEND:-rknn}"
+export FCV_TORCHREID_ROOT="${FCV_TORCHREID_ROOT:-$HOME/fcv_third_party/deep-person-reid}"
 
 if [[ ! -f /opt/ros/jazzy/setup.bash ]]; then
   echo 'ROS 2 Jazzy setup missing' >&2

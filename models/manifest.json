@@ -10,6 +10,15 @@
       "redistribution": "not verified; download from upstream"
     },
     {
+      "name": "osnet_x0_25_msmt17_rk3576_fp16",
+      "filename": "osnet_x0_25_msmt17_fp16.rknn",
+      "repo_path": "models/reid/rk3576/osnet_x0_25_msmt17_fp16.rknn",
+      "derived_from": "osnet_x0_25_msmt17",
+      "target": "rk3576",
+      "sha256": "b84b904776a33ad3f2dcbd5d113b0e820ae55c236d18a4ad327703fa472ed0f5",
+      "redistribution": "not verified; generated artifact kept off Git"
+    },
+    {
       "name": "osnet_x0_25_msmt17",
       "filename": "osnet_x0_25_msmt17.pth",
       "repo_path": "models/reid/osnet_x0_25_msmt17.pth",

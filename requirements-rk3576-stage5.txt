@@ -1,0 +1,10 @@
+# Python 3.12 Stage5 V2 runtime as verified on RK3576 (2026-09-25).
+# Install the vendor ARM64 rknn-toolkit-lite2 wheel separately; its pip
+# dependencies are psutil and ruamel.yaml. Keep model binaries outside Git.
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+torch==2.5.1
+psutil==7.2.2
+ruamel.yaml==0.19.1
+# rknn-toolkit-lite2==2.3.2 (vendor ARM64 wheel)
+# Native BoxMOT is built by scripts/build_boxmot_native.sh, not pip.

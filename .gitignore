@@ -36,6 +36,7 @@ datasets/*
 *.ulg
 *.task
 *.onnx
+*.rknn
 *.pt
 *.pth
 *.npy

@@ -22,10 +22,10 @@ class Stage5PipelineV2:
                 *, rectified_left=None):
         start = time.perf_counter()
         poses = pose_frame.poses
-        # Depth from the original simultaneous SBS pair; pose on rectified LEFT.
-        rectified, depths = self.depth.process(left_raw, right_raw,
-                                                [p.bbox_xyxy for p in poses],
-                                                rectified_left=rectified_left)
+        # ReID and the tracker need only the rectified left image. Disparity is
+        # expensive and is useful only for a current tracked observation.
+        rectified, _ = self.depth.process(left_raw, right_raw, [],
+                                          rectified_left=rectified_left)
         embeddings = []; qualities = []; keep = []
         osnet_total_ms = 0.0
         for i, pose in enumerate(poses):
@@ -37,6 +37,15 @@ class Stage5PipelineV2:
                 qualities.append(quality)
         rows = self.tracker.update(rectified, [poses[i].bbox_xyxy for i in keep],
                                    [float(poses[i].pose_score or 0.) for i in keep], embeddings)
+        tracked_sources = list(dict.fromkeys(
+            keep[row["detection_index"]] for row in rows
+            if 0 <= row["detection_index"] < len(keep)))
+        # Preserve the exact Stage2 depth algorithm and original SBS inputs.
+        # If no detection survived ReID/tracking, avoid full-frame SGBM.
+        _, tracked_depths = self.depth.process(
+            left_raw, right_raw, [poses[i].bbox_xyxy for i in tracked_sources],
+            rectified_left=rectified)
+        depths = dict(zip(tracked_sources, tracked_depths))
         people = []
         for row in rows:
             index = row["detection_index"]

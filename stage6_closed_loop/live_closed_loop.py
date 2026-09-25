@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NUC-only visual Stage 5 -> AuthorizedGestureV1 -> ROS Intent runner.
+"""Visual Stage 5 -> AuthorizedGestureV1 -> ROS Intent runner.
 
 Default topic is isolated dry-run. This program never arms/takes off/lands.
 """
@@ -30,8 +30,15 @@ def parse_args():
     p.add_argument("--calibration",type=Path,default=Path(os.environ["FCV_CALIBRATION_PATH"]) if "FCV_CALIBRATION_PATH" in os.environ else Path("~/drone_stage2/stereo_calibration/stereo_calibration_output/20260914_092939_UTC__run_B_exclude_0004_0027/calibration.yaml"))
     p.add_argument("--boxmot-lib",type=Path,default=repo / "stage5_operator/build/botsort/botsort_capi.so" if repo else Path("~/drone_stage5_operator/build/botsort/botsort_capi.so"))
     p.add_argument("--torchreid-root",type=Path,default=repo / "third_party/deep-person-reid" if repo else Path("~/drone_vision_refs/operator_lock/deep-person-reid"))
-    p.add_argument("--osnet-checkpoint",type=Path,required=True)
-    p.add_argument("--camera",default="/dev/video0")
+    p.add_argument("--osnet-checkpoint",type=Path,default=None)
+    p.add_argument("--reid-backend",choices=("torch","rknn"),
+                   default=os.environ.get("FCV_REID_BACKEND","torch"))
+    p.add_argument("--rknn-osnet-model",type=Path,
+                   default=repo / "models/reid/rk3576/osnet_x0_25_msmt17_fp16.rknn" if repo else None)
+    p.add_argument("--rknn-osnet-sha256",default=None)
+    p.add_argument("--camera",default=os.environ.get("FCV_CAMERA_DEVICE","/dev/video0"))
+    p.add_argument("--input-rotate-180",action="store_true",
+                   help="Rotate only the rectified analysis image; keep stereo depth in Run B coordinates")
     p.add_argument("--num-poses",type=int,default=4)
     p.add_argument("--auto-reauthorize",action="store_true")
     p.add_argument("--vision-command-timeout-ms",type=int,default=300)
@@ -75,6 +82,7 @@ def main():
     from stage5_v2.ownership import Settings
     from stage5_v2.pipeline import Stage5PipelineV2
     from stage5_v2.reid import OSNetEmbedder
+    from stage5_v2.reid_rknn import RKNNOSNetEmbedder, VALIDATED_RK3576_SHA256
     from stage5_v2.tracker import BotSortTrackerAdapter
     from live_operator_v2 import draw as draw_stage5
     from stage6.ros_intent_node import AuthorizedIntentPublisher
@@ -82,12 +90,22 @@ def main():
     from stage6.intent_adapter import GESTURE_TO_INTENT
     from stage6.px4_observer import Gate6CObserver
     from stage6.run_context import RunContext, write_jsonl, utc_now
+    from stage6.rotated_depth import RotatedDepthAdapter
 
     # Fail before camera use if any authority-bearing dependency is missing.
-    embedder = OSNetEmbedder(args.osnet_checkpoint,args.torchreid_root)
+    if args.reid_backend == "rknn":
+        if args.rknn_osnet_model is None:
+            raise ValueError("--rknn-osnet-model is required for RKNN ReID")
+        embedder = RKNNOSNetEmbedder(args.rknn_osnet_model,
+            expected_sha256=args.rknn_osnet_sha256 or VALIDATED_RK3576_SHA256)
+    else:
+        if args.osnet_checkpoint is None:
+            raise ValueError("--osnet-checkpoint is required for Torch ReID")
+        embedder = OSNetEmbedder(args.osnet_checkpoint,args.torchreid_root)
     depth = StereoPersonDepthAdapter(args.calibration,args.stage2_root)
+    analysis_depth = RotatedDepthAdapter(depth) if args.input_rotate_180 else depth
     tracker = BotSortTrackerAdapter(args.boxmot_lib)
-    pipeline = Stage5PipelineV2(tracker,embedder,depth,
+    pipeline = Stage5PipelineV2(tracker,embedder,analysis_depth,
         ownership_settings=Settings(auto_reauthorize_enabled=args.auto_reauthorize))
     config = AppConfig(camera=replace(CameraConfig(),device=args.camera),
                        backend=replace(BackendConfig(),num_poses=args.num_poses))
@@ -97,6 +115,7 @@ def main():
     output.mkdir(parents=True,exist_ok=False)
     run = RunContext(output)
     run.manifest(status="RUNNING", intent_topic=args.topic,
+                 reid_backend=args.reid_backend,reid_model_sha256=embedder.sha256,
                  gateway_topic_explicit=args.allow_live_output,
                  camera_device=args.camera,
                  vision_command_timeout_ms=args.vision_command_timeout_ms,
@@ -163,15 +182,23 @@ def main():
                 frame = camera.read()
                 right = frame.raw_sbs[:,config.camera.eye_width:].copy()
                 rectified_left = cv2.remap(frame.left_raw,*depth.maps[0],cv2.INTER_LINEAR)
-                pose_frame = backend.infer(rectified_left,frame.timestamp_ns//1_000_000,frame.frame_id)
+                analysis_left = (cv2.rotate(rectified_left,cv2.ROTATE_180)
+                                 if args.input_rotate_180 else rectified_left)
+                if args.input_rotate_180:
+                    analysis_depth.prepare(rectified_left,analysis_left)
+                pose_frame = backend.infer(analysis_left,frame.timestamp_ns//1_000_000,frame.frame_id)
                 rectified,people,authorized,log = pipeline.process(
                     frame.left_raw,right,pose_frame,evaluator,normalizer,
-                    rectified_left=rectified_left)
+                    rectified_left=analysis_left)
                 log["capture_monotonic_ns"] = frame.timestamp_ns
                 log.update(run.stamp(frame.timestamp_ns))
                 log["stage6_topic"] = args.topic
+                log["pose_count"] = len(pose_frame.poses)
+                log["pose_inference_ms"] = pose_frame.inference_latency_ms
                 log["frame_processing_ms"] = (time.monotonic_ns()-processing_start_ns)/1_000_000
                 accepted = node.submit(authorized,log)
+                log["stage6_ms"] = (time.monotonic_ns()-processing_start_ns)/1_000_000-log["frame_processing_ms"]
+                log["frame_age_at_intent_ms"] = (time.monotonic_ns()-frame.timestamp_ns)/1_000_000
                 log.update(node.authority_snapshot())
                 log["identity_authorized"] = bool(
                     authorized.authorization_state == "LOCKED_HIGH" and
@@ -210,10 +237,13 @@ def main():
                     })
                     pending_record_start = False
                 if recorder.active:
+                    record_started_ns = time.monotonic_ns()
                     log["video_clip"] = recorder.clip_paths[-1]
                     log["video_frame_index"] = recorder.frame_count
                     recorder.write(annotated,frame.raw_sbs,log,frame.timestamp_ns)
+                    log["record_ms"] = (time.monotonic_ns()-record_started_ns)/1_000_000
                 else:
+                    log["record_ms"] = 0.0
                     log["video_clip"] = None
                     log["video_frame_index"] = None
                 write_jsonl(vision_file,log)
@@ -274,7 +304,9 @@ def main():
             px4_file.close()
         rclpy.try_shutdown()
         tracker.close()
-        cv2.destroyAllWindows()
+        embedder.close()
+        if not args.no_display:
+            cv2.destroyAllWindows()
     summary = {"status":"ERROR_FAIL_CLOSED" if failure else "VISUAL_ONLY_DRY_RUN_COMPLETE" if args.topic.endswith("dry_run") else "LIVE_INTENT_RUN_COMPLETE",
                "frames":count,"error":failure,"intent_topic":args.topic,
                "no_arm_takeoff_land":True,"gateway_topic_explicit":args.allow_live_output,

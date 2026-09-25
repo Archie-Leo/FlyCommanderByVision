@@ -43,16 +43,45 @@ class PreviewState:
     def __init__(self):
         self.condition = threading.Condition()
         self.jpeg = None
+        self.jpeg_capture_ns = None
+        self.display_status = {}
         self.sequence = 0
         self.stopped = False
         self.error = None
         self.status = {"frames_processed": 0, "fps": 0.0}
+        self.analysis = None
+        self.analysis_sequence = 0
+        self.render_error = None
+
+    def publish_analysis(self, analysis, status: dict):
+        # One overwriteable slot: rendering can never hold up inference.
+        with self.condition:
+            self.analysis = analysis
+            self.analysis_sequence += 1
+            self.status = dict(status, **self.display_status,
+                               frames_displayed=self.sequence,
+                               render_error=self.render_error)
+            self.condition.notify_all()
 
     def publish(self, jpeg: bytes, status: dict):
         with self.condition:
             self.jpeg = jpeg
+            self.jpeg_capture_ns = status["capture_timestamp_monotonic_ns"]
             self.sequence += 1
-            self.status = status
+            self.display_status = {
+                "display_capture_timestamp_monotonic_ns": self.jpeg_capture_ns,
+                "display_frame_id": status["display_frame_id"],
+                "frame_ready_monotonic_ns": status["frame_ready_monotonic_ns"],
+                "host_receipt_age_at_publish_ms": status["host_receipt_age_at_publish_ms"],
+            }
+            self.status = dict(self.status, **self.display_status,
+                               frames_displayed=self.sequence)
+            self.condition.notify_all()
+
+    def fail_render(self, error):
+        with self.condition:
+            self.render_error = str(error)
+            self.status = dict(self.status, render_error=self.render_error)
             self.condition.notify_all()
 
     def stop(self, error=None):
@@ -122,6 +151,14 @@ def make_handler(state: PreviewState):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(data)
+            elif self.path == "/clock":
+                data = json.dumps({"monotonic_ns": time.monotonic_ns()}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
             elif self.path == "/stream.mjpg":
                 self.send_response(200)
                 self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
@@ -140,10 +177,12 @@ def make_handler(state: PreviewState):
                                     break
                                 continue
                             jpeg = state.jpeg
+                            capture_ns = state.jpeg_capture_ns
                             last_sequence = state.sequence
                         # A slow viewer skips intermediate frames; it never
                         # queues images or holds the producer's lock while writing.
                         self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\n"
+                                         + f"X-Frame-Capture-Monotonic-Ns: {capture_ns}\r\n".encode()
                                          + f"Content-Length: {len(jpeg)}\r\n\r\n".encode()
                                          + jpeg + b"\r\n")
                 except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
@@ -190,16 +229,16 @@ def run_camera(args, state: PreviewState, server: ThreadingHTTPServer):
                 fps = 1.0 / statistics.fmean(intervals) if intervals else 0.0
                 total_ms = (now - started) * 1000
                 dropped = getattr(camera, "dropped_frames", 0)
-                overlay = draw_panel(analysis_frame, pose, quality, raw, stable, fps,
-                                     pose_frame.inference_latency_ms, total_ms,
-                                     dropped, args.display_mirror, args.display_width)
-                ok, encoded = cv2.imencode(".jpg", overlay,
-                                           [cv2.IMWRITE_JPEG_QUALITY, 75])
-                if not ok:
-                    raise RuntimeError("JPEG encoding failed")
+                ready_ns = time.monotonic_ns()
                 processed += 1
-                state.publish(encoded.tobytes(), {
+                state.publish_analysis((analysis_frame, pose, quality, raw, stable,
+                                        fps, pose_frame.inference_latency_ms,
+                                        total_ms, dropped, camera_frame.timestamp_ns), {
                     "frames_processed": processed, "frame_id": pose_frame.frame_id,
+                    "capture_timestamp_monotonic_ns": camera_frame.timestamp_ns,
+                    "vision_ready_monotonic_ns": ready_ns,
+                    "host_receipt_age_at_vision_ms": round(
+                        (ready_ns - camera_frame.timestamp_ns) / 1e6, 2),
                     "fps": round(fps, 2), "pose_count": len(pose_frame.poses),
                     "quality_valid": quality.valid, "raw_gesture": raw.label.value,
                     "stable_gesture": stable.label.value,
@@ -216,6 +255,42 @@ def run_camera(args, state: PreviewState, server: ThreadingHTTPServer):
         state.stop(error)
         if args.max_frames or error:
             server.shutdown()
+
+
+def run_render(args, state: PreviewState):
+    last_analysis = 0
+    try:
+        while True:
+            with state.condition:
+                state.condition.wait_for(
+                    lambda: state.analysis_sequence != last_analysis or state.stopped,
+                    timeout=1)
+                if state.analysis_sequence == last_analysis:
+                    if state.stopped:
+                        return
+                    continue
+                analysis = state.analysis
+                last_analysis = state.analysis_sequence
+            (frame, pose, quality, raw, stable, fps, pose_ms, total_ms,
+             dropped, capture_ns) = analysis
+            overlay = draw_panel(frame, pose, quality, raw, stable, fps,
+                                 pose_ms, total_ms, dropped,
+                                 args.display_mirror, args.display_width)
+            ok, encoded = cv2.imencode(".jpg", overlay,
+                                       [cv2.IMWRITE_JPEG_QUALITY, 75])
+            if not ok:
+                raise RuntimeError("JPEG encoding failed")
+            ready_ns = time.monotonic_ns()
+            state.publish(encoded.tobytes(), {
+                "display_frame_id": last_analysis,
+                "capture_timestamp_monotonic_ns": capture_ns,
+                "frame_ready_monotonic_ns": ready_ns,
+                "host_receipt_age_at_publish_ms": round(
+                    (ready_ns - capture_ns) / 1e6, 2),
+            })
+    except Exception as exc:
+        state.fail_render(exc)
+        print(f"Preview render error: {exc}", file=sys.stderr, flush=True)
 
 
 def main():
@@ -241,6 +316,9 @@ def main():
     server.daemon_threads = True
     worker = threading.Thread(target=run_camera, args=(args, state, server),
                               name="stage4-preview-camera", daemon=True)
+    renderer = threading.Thread(target=run_render, args=(args, state),
+                                name="stage4-preview-render", daemon=True)
+    renderer.start()
     worker.start()
     print(f"Preview: http://{args.host}:{args.port}/", flush=True)
     try:
@@ -251,6 +329,7 @@ def main():
         state.stop()
         server.server_close()
         worker.join(timeout=7)
+        renderer.join(timeout=7)
     return 1 if state.error else 0
 
 

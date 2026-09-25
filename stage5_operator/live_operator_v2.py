@@ -112,7 +112,7 @@ def main():
     sys.path[:0] = [str(stage3), str(stage4)]
     from camera.stereo_left_source import open_stereo_source
     from config import AppConfig, BackendConfig, CameraConfig
-    from pose.mediapipe_backend import MediaPipePoseBackend
+    from pose.factory import create_pose_backend
     from pose.normalize import SkeletonNormalizer
     from pose.quality import PoseQualityEvaluator
     from stage5_v2.depth import StereoPersonDepthAdapter
@@ -158,7 +158,7 @@ def main():
     count = 0; failure = None; debug = False; started = time.perf_counter()
     try:
         with log_path.open("w",encoding="utf-8") as handle:
-            with MediaPipePoseBackend(config.backend) as backend, open_stereo_source(config.camera) as camera:
+            with create_pose_backend(config.backend) as backend, open_stereo_source(config.camera) as camera:
                 while not args.max_frames or count < args.max_frames:
                     frame = camera.read()
                     capture_wall_time_utc = datetime.now(timezone.utc).isoformat(timespec="milliseconds")

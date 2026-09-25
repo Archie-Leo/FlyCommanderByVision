@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from dataclasses import replace
@@ -25,7 +26,8 @@ LABEL_KEYS = {
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Stage 4 live geometry gesture baseline")
-    parser.add_argument("--stage3-root", type=Path, default=Path.home() / "drone_stage3_pose")
+    parser.add_argument("--stage3-root", type=Path, default=Path(os.environ["REPO_ROOT"]) / "stage3_pose" if "REPO_ROOT" in os.environ else Path.home() / "drone_stage3_pose")
+    parser.add_argument("--pose-backend", choices=("mediapipe", "rknn"), default=None)
     parser.add_argument("--camera", default="/dev/video0")
     parser.add_argument("--output", type=Path, default=Path("datasets"))
     parser.add_argument("--max-frames", type=int, default=0)
@@ -94,7 +96,7 @@ def main() -> int:
     from camera.stereo_left_source import open_stereo_source
     from config import AppConfig, BackendConfig, CameraConfig
     from countdown import CaptureCountdown
-    from pose.mediapipe_backend import MediaPipePoseBackend
+    from pose.factory import create_pose_backend
     from pose.normalize import SkeletonNormalizer
     from pose.quality import PoseQualityEvaluator
     from ui import draw_overlay
@@ -116,7 +118,7 @@ def main() -> int:
     recording_path = None
 
     try:
-        with MediaPipePoseBackend(config.backend) as backend, open_stereo_source(config.camera) as camera:
+        with create_pose_backend(config.backend, args.pose_backend) as backend, open_stereo_source(config.camera) as camera:
             while True:
                 started = time.perf_counter_ns()
                 camera_frame = camera.read()

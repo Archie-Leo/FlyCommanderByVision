@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
 import time
@@ -16,7 +17,7 @@ from camera.stereo_left_source import open_stereo_source
 from config import AppConfig, BackendConfig, CameraConfig
 from countdown import CaptureCountdown
 from metrics import RuntimeMetrics
-from pose.mediapipe_backend import MediaPipePoseBackend
+from pose.factory import create_pose_backend
 from pose.normalize import SkeletonNormalizer
 from pose.quality import PoseQualityEvaluator
 from ui import draw_overlay
@@ -26,7 +27,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Stage 3 rectified LEFT pose and normalization")
     parser.add_argument("--camera", default="/dev/video0")
     parser.add_argument("--calibration", type=Path, default=AppConfig().calibration_path)
-    parser.add_argument("--model", type=Path, default=BackendConfig().model_path)
+    parser.add_argument("--model", type=Path, default=None)
+    parser.add_argument("--pose-backend", choices=("mediapipe", "rknn"), default=None)
     parser.add_argument("--output", type=Path, default=Path("outputs"))
     parser.add_argument("--max-frames", type=int, default=0, help="0 means run until Q/ESC")
     parser.add_argument("--no-display", action="store_true", help="Headless smoke/performance run")
@@ -60,7 +62,7 @@ def main() -> int:
     args = parse_args()
     config = AppConfig(
         camera=replace(CameraConfig(), device=args.camera),
-        backend=replace(BackendConfig(), model_path=args.model),
+        backend=replace(BackendConfig(), model_path=args.model or BackendConfig().model_path),
         calibration_path=args.calibration,
     )
     output_dir = args.output.expanduser().resolve()
@@ -77,7 +79,7 @@ def main() -> int:
     started_utc = datetime.now(timezone.utc).isoformat()
 
     try:
-        with MediaPipePoseBackend(config.backend) as backend, open_stereo_source(config.camera) as camera:
+        with create_pose_backend(config.backend, args.pose_backend, args.model) as backend, open_stereo_source(config.camera) as camera:
             while True:
                 loop_started = time.perf_counter_ns()
                 camera_frame = camera.read()
@@ -137,7 +139,8 @@ def main() -> int:
                 if args.max_frames and processed >= args.max_frames:
                     break
     finally:
-        cv2.destroyAllWindows()
+        if not args.no_display:
+            cv2.destroyAllWindows()
 
     report = {
         "status": "SOFTWARE_RUN_COMPLETE",
@@ -147,10 +150,12 @@ def main() -> int:
         "frames_processed": processed,
         "frames_with_pose": frames_with_pose,
         "quality_valid_frames": quality_valid_frames,
+        "camera_dropped_frames": getattr(camera, "dropped_frames", None),
         "camera_device": config.camera.device,
         "calibration_path": str(rectifier.path),
         "calibration_id": rectifier.calibration_id,
-        "model_path": str(config.backend.model_path.expanduser().resolve()),
+        "pose_backend": args.pose_backend or os.environ.get("FCV_POSE_BACKEND", "mediapipe"),
+        "model_path": str(getattr(backend, "model_path", config.backend.model_path).expanduser().resolve()),
         "metrics": metrics.report(),
         "timestamp_note": "host monotonic timestamp; not sensor exposure timestamp",
     }
@@ -165,6 +170,9 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:
-        cv2.destroyAllWindows()
+        try:
+            cv2.destroyAllWindows()
+        except cv2.error:
+            pass  # Headless OpenCV builds do not provide HighGUI.
         print(f"STAGE 3 ERROR: {exc}", file=sys.stderr)
         raise SystemExit(2)

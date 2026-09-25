@@ -8,6 +8,9 @@ export FCV_CAMERA_DEVICE="${FCV_CAMERA_DEVICE:-/dev/video73}"
 export FCV_CALIBRATION_PATH="${FCV_CALIBRATION_PATH:-${REPO_ROOT}/configs/calibration/run_b.yaml}"
 export FCV_REID_BACKEND="${FCV_REID_BACKEND:-rknn}"
 export FCV_TORCHREID_ROOT="${FCV_TORCHREID_ROOT:-$HOME/fcv_third_party/deep-person-reid}"
+export FCV_POSE_BACKEND="${FCV_POSE_BACKEND:-rknn}"
+export FCV_POSE_MODEL_PATH="${FCV_POSE_MODEL_PATH:-$HOME/fcv_third_party/rknn_model_zoo/examples/yolov8_pose/model/yolov8n-pose-rk3576-int8.rknn}"
+export FCV_POSE_NATIVE_LIB="${FCV_POSE_NATIVE_LIB:-${REPO_ROOT}/stage3_pose/build/rknn_pose/libfcv_rknn_pose.so}"
 
 if [[ ! -f /opt/ros/jazzy/setup.bash ]]; then
   echo 'ROS 2 Jazzy setup missing' >&2

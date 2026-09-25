@@ -1,5 +1,10 @@
 # RK3576 migration report — 2026-09-25
 
+Stage5 update: the OSNet checkpoint, RKNN backend, and exact BoxMOT v25
+native library are now available and validated. See `RK3576_STAGE5_MIGRATION.md`
+for current Stage5 evidence; the earlier Stage5 asset blockers below describe
+the initial migration snapshot.
+
 ## 1. Hardware and 2. OS / architecture
 
 - Board: Taishan Pi 3M, Rockchip RK3576, aarch64, 8 CPU cores.

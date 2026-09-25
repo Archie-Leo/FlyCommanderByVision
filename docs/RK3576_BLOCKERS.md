@@ -1,5 +1,10 @@
 # RK3576 blockers — 2026-09-25
 
+Stage5 OSNet checkpoint and exact BoxMOT native dependency blockers were
+resolved in the Stage5 migration; see `RK3576_STAGE5_MIGRATION.md`. The Pose
+backend remains the blocker for live Stage5/6 vision. The original observations
+below are retained as migration history and are superseded for Stage5 assets.
+
 ## BLOCKER_RK3576_POSE_BACKEND
 
 - 模块：Stage3 Pose inference；连带影响 Stage4/5/6 实时视觉证据。
@@ -11,7 +16,7 @@
 - 用户需要做什么：提供或选定可用于 RK3576 的 Pose 模型及来源；若要继续使用 NUC MediaPipe 模型，请提供原文件并按 `models/manifest.json` 校验 SHA256 `4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad`（仅供 NUC/兼容 CPU 使用）。
 - 下一步命令/文件：`stage3_pose/pose/backend.py`、`stage3_pose/pose/types.py`、`stage3_pose/pose/normalize.py`、`stage4_gesture/gesture/geometry.py`；先写 RKNN→`PoseFrame` 映射测试，再分别运行 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/venvs/fcv/bin/python3 -m pytest -q stage3_pose/tests` 和相同命令的 `stage4_gesture/tests`。分别运行可避免 `tests` 包名冲突。
 
-## BLOCKER_MISSING_OSNET_CHECKPOINT
+## RESOLVED_MISSING_OSNET_CHECKPOINT (historical)
 
 - 模块：Stage5 V2 OSNet ReID。
 - 现象：`/home/lckfb/FlyCommanderByVision/models/reid/osnet_x0_25_msmt17.pth` 不存在。
@@ -22,7 +27,7 @@
 - 用户需要做什么：从原 NUC 的同一路径复制官方 OSNet x0.25 MSMT17 文件，或按 `models/manifest.json` 的官方 source 页面获取**同一文件**。预期大小 9,336,983 字节，SHA256 `cf55163d78fc44c62c82f85ab62d39f10438679b5abe8c698ae08cfa84aa6e18`。
 - 下一步命令/文件：`mkdir -p ~/FlyCommanderByVision/models/reid`；复制后运行 `sha256sum ~/FlyCommanderByVision/models/reid/osnet_x0_25_msmt17.pth`；应与上述 hash 完全相同，再检查 `stage5_operator/stage5_v2/reid.py` 加载。
 
-## BLOCKER_STAGE5_V2_NATIVE_DEPENDENCIES
+## RESOLVED_STAGE5_V2_NATIVE_DEPENDENCIES (historical)
 
 - 模块：Stage5 V2 BoT-SORT / OSNet runtime。
 - 现象：`stage5_operator/build/botsort/botsort_capi.so` 与 `third_party/deep-person-reid/torchreid/models/osnet.py` 均不存在；当前 `fcv` venv 未见 PyTorch/BoxMOT。

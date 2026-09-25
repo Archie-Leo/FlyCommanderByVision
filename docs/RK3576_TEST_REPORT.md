@@ -1,5 +1,9 @@
 # RK3576 test report — 2026-09-25
 
+Stage5 update: see `RK3576_STAGE5_MIGRATION.md` for the later 108-pass Stage5
+suite, 40 real-crop alignment samples, and native BoxMOT integration. Stage5
+asset blockers in the original table below describe the initial snapshot.
+
 All tests below were run on the Taishan Pi RK3576. No aircraft arm, Offboard entry, velocity command, or trajectory setpoint was sent to PX4.
 
 | Area | Result | Evidence |

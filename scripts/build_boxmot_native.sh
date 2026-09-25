@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BOXMOT="${DRONE_REF_ROOT:-$HOME/drone_vision_refs/operator_lock}/boxmot"
+if [[ -n "${DRONE_REF_ROOT:-}" ]]; then
+  BOXMOT="$DRONE_REF_ROOT/boxmot"
+elif [[ -d "$HOME/fcv_third_party/boxmot/.git" ]]; then
+  BOXMOT="$HOME/fcv_third_party/boxmot"
+else
+  BOXMOT="$HOME/drone_vision_refs/operator_lock/boxmot"
+fi
 EXPECTED=857628343860db1ea48ea50db7a73c25b7a3be13
 [[ -d "$BOXMOT/.git" ]] || { echo "BoxMOT source missing: $BOXMOT" >&2; exit 1; }
 [[ "$(git -C "$BOXMOT" rev-parse HEAD)" == "$EXPECTED" ]] || {

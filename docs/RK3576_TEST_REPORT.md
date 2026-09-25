@@ -1,5 +1,14 @@
 # RK3576 test report — 2026-09-25
 
+Stage3 Pose update: native RKNN YOLOv8n-Pose passed 31 Stage3 tests (including
+real model/rectified-size checks), 14 Stage4 tests plus 5 subtests, 108 Stage5
+tests and 44+21 Stage6 dry-run tests. On a 1280×960 timing fixture, 220
+integrated PoseFrame runs averaged 36.97 ms (P95 58.13 ms); with OSNet
+coexistence, 220 Pose runs averaged 37.58 ms (P95 40.91 ms) and 22 ReID calls
+succeeded. The actual calibrated camera loop processed 120 frames at 17.03
+sampled FPS, dropping 279 older frames; no person was present. See
+`RK3576_STAGE3_POSE_MIGRATION.md`. The original table below is historical.
+
 Stage5 update: see `RK3576_STAGE5_MIGRATION.md` for the later 108-pass Stage5
 suite, 40 real-crop alignment samples, and native BoxMOT integration. Stage5
 asset blockers in the original table below describe the initial snapshot.

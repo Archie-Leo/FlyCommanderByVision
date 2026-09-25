@@ -1,5 +1,12 @@
 # RK3576 migration report — 2026-09-25
 
+Stage3 Pose update: the official Rockchip YOLOv8n-Pose INT8 RKNN native backend
+now supplies `PoseFrameV1` on RK3576. The 120-frame calibrated camera loop and
+Stage3–6 software regressions pass. Real-person gesture/confidence validation
+is pending; see `RK3576_STAGE3_POSE_MIGRATION.md` for model hashes, measured
+performance, mappings and remaining limits. Older Pose blocker statements below
+describe the initial migration snapshot.
+
 Stage5 update: the OSNet checkpoint, RKNN backend, and exact BoxMOT v25
 native library are now available and validated. See `RK3576_STAGE5_MIGRATION.md`
 for current Stage5 evidence; the earlier Stage5 asset blockers below describe

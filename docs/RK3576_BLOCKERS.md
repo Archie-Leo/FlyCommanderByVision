@@ -1,11 +1,19 @@
 # RK3576 blockers — 2026-09-25
 
 Stage5 OSNet checkpoint and exact BoxMOT native dependency blockers were
-resolved in the Stage5 migration; see `RK3576_STAGE5_MIGRATION.md`. The Pose
-backend remains the blocker for live Stage5/6 vision. The original observations
-below are retained as migration history and are superseded for Stage5 assets.
+resolved in the Stage5 migration; see `RK3576_STAGE5_MIGRATION.md`. The
+MediaPipe LSE Pose blocker was resolved for RK3576 by the native RKNN backend;
+see `RK3576_STAGE3_POSE_MIGRATION.md`. The original observations below are
+retained as migration history.
 
-## BLOCKER_RK3576_POSE_BACKEND
+## BLOCKER_POSE_CONFIDENCE_REAL_GESTURE_VALIDATION
+
+- Functional status: RKNN PoseFrame backend, official decode/NMS, 1280×960 coordinate bounds, multi-person output, calibrated camera loop, and Stage3–6 software regressions pass.
+- Remaining evidence: the test image has three people and passes the Stage3 joint quality gate, but contains no supported gesture; the camera test had no person in view. Raw YOLO keypoint confidence is not the same quantity as MediaPipe visibility/presence. Real or recorded gesture sequences at several distances are needed to check the frozen 0.50 quality and 0.65 Stage4 gates, anatomical sides and Unknown Reject behavior. Do not tune thresholds from the bus image.
+- Camera observation: two initial runs saw FFmpeg EOF; a diagnostic run and two later 120-frame Stage3 runs completed. The transient cause is unresolved. The capture path keeps only the latest frame.
+- User action: provide an approved recorded rectified-left gesture sequence or arrange a supervised, non-flight camera session. No PX4 live output is required.
+
+## RESOLVED_BLOCKER_RK3576_POSE_BACKEND (historical)
 
 - 模块：Stage3 Pose inference；连带影响 Stage4/5/6 实时视觉证据。
 - 现象：已试的 MediaPipe 1.0.1 ARM64 wheel 在 PoseLandmarker 启动时因 LSE 指令缺失 SIGILL；本板 `/proc/cpuinfo` 的 `Features` 无 `atomics`。本仓库 `stage3_pose/models/pose_landmarker_full.task` 也不存在。

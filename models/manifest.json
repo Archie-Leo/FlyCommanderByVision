@@ -10,6 +10,18 @@
       "redistribution": "not verified; download from upstream"
     },
     {
+      "name": "yolov8n_pose_rk3576_int8",
+      "filename": "yolov8n-pose-rk3576-int8.rknn",
+      "board_path": "~/fcv_third_party/rknn_model_zoo/examples/yolov8_pose/model/yolov8n-pose-rk3576-int8.rknn",
+      "upstream": "Rockchip rknn_model_zoo v2.3.2",
+      "upstream_commit": "bad6c7334531becaf90a561988519b7bec34d0ab",
+      "onnx_sha256": "308495ebe4416b40adf376485252a7b8ba7933a169368b31e74e0f977ded8663",
+      "target": "rk3576",
+      "sha256": "95c857fc580814ff08ab5e417b904ea4a926bfdded68104520c540a17c186b9c",
+      "size_bytes_observed": 7441335,
+      "redistribution": "not verified; generated artifact kept off Git"
+    },
+    {
       "name": "osnet_x0_25_msmt17_rk3576_fp16",
       "filename": "osnet_x0_25_msmt17_fp16.rknn",
       "repo_path": "models/reid/rk3576/osnet_x0_25_msmt17_fp16.rknn",

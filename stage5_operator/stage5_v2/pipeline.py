@@ -9,10 +9,12 @@ from .ownership import OwnershipManagerV2, PersonObservation, Settings, State
 
 
 class Stage5PipelineV2:
-    def __init__(self, tracker, embedder, depth, *, ownership_settings=None):
+    def __init__(self, tracker, embedder, depth, *, ownership_settings=None,
+                 roi_depth=True):
         self.tracker = tracker
         self.embedder = embedder
         self.depth = depth
+        self.roi_depth = roi_depth
         self.ownership = OwnershipManagerV2(ownership_settings or Settings())
         self.gesture = GeometryGestureRecognizer()
         self.temporal = TemporalStabilizer()
@@ -42,9 +44,19 @@ class Stage5PipelineV2:
             if 0 <= row["detection_index"] < len(keep)))
         # Preserve the exact Stage2 depth algorithm and original SBS inputs.
         # If no detection survived ReID/tracking, avoid full-frame SGBM.
-        _, tracked_depths = self.depth.process(
-            left_raw, right_raw, [poses[i].bbox_xyxy for i in tracked_sources],
-            rectified_left=rectified)
+        tracked_boxes = [poses[i].bbox_xyxy for i in tracked_sources]
+        track_by_source = {keep[row["detection_index"]]: row["track_id"] for row in rows
+                           if 0 <= row["detection_index"] < len(keep)}
+        tracked_ids = [track_by_source[i] for i in tracked_sources]
+        use_roi_depth = self.roi_depth and callable(getattr(self.depth, "process_tracked", None))
+        if use_roi_depth:
+            _, tracked_depths = self.depth.process_tracked(
+                left_raw, right_raw, tracked_boxes, tracked_ids,
+                frame_id=pose_frame.frame_id, timestamp_ms=pose_frame.timestamp_ms,
+                rectified_left=rectified)
+        else:
+            _, tracked_depths = self.depth.process(
+                left_raw, right_raw, tracked_boxes, rectified_left=rectified)
         depths = dict(zip(tracked_sources, tracked_depths))
         people = []
         for row in rows:
@@ -79,6 +91,14 @@ class Stage5PipelineV2:
         authorized = self.ownership.authorize(gesture_stable, pose_frame.timestamp_ms, pose_frame.frame_id)
         candidates = [c.to_dict() for c in self.ownership.candidates]
         memory = self.ownership.memory
+        total_ms = (time.perf_counter()-start)*1000.0
+        depth_ages = getattr(self.depth, "last_depth_ages_ms", []) if use_roi_depth else []
+        depth_sources = getattr(self.depth, "last_depth_sources", []) if use_roi_depth else []
+        depth_observations = [dict(track_id=track_id, valid=value.available,
+                                   age_ms=depth_ages[i] if i < len(depth_ages) else None,
+                                   source_frame_id=depth_sources[i] if i < len(depth_sources) else None,
+                                   depth_m=value.depth_m)
+                              for i, (track_id, value) in enumerate(zip(tracked_ids, tracked_depths))]
         log = {
             "schema_version": "Stage5V2Frame", "timestamp_ms": pose_frame.timestamp_ms,
             "frame_id": pose_frame.frame_id, "tracker": "boxmot_native_botsort",
@@ -107,5 +127,14 @@ class Stage5PipelineV2:
                            "osnet_total": osnet_total_ms,
                            "stereo_depth": self.depth.last_latency_ms,
                            "ownership_fusion": fusion_latency_ms,
-                           "stage5_total": (time.perf_counter()-start)*1000.0}}
+                           "stage5_total": total_ms,
+                           "stage5_non_depth": max(0., total_ms-self.depth.last_latency_ms)},
+            "depth_mode": "ROI" if use_roi_depth else "FULL_FRAME",
+            "depth_profile_ms": getattr(self.depth, "last_profile_ms", {}) if use_roi_depth else {},
+            "depth_age_ms": getattr(self.depth, "last_depth_ages_ms", []) if use_roi_depth else [],
+            "depth_observations": depth_observations,
+            "depth_source_frame_ids": getattr(self.depth, "last_depth_sources", []) if use_roi_depth else [],
+            "depth_valid": getattr(self.depth, "last_depth_valid", []) if use_roi_depth else [],
+            "depth_updated_count": getattr(self.depth, "last_updated_count", 0) if use_roi_depth else 0,
+            "depth_roi_shapes": getattr(self.depth, "last_roi_shapes", []) if use_roi_depth else []}
         return rectified, people, authorized, log

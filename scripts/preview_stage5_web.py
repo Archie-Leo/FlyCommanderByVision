@@ -30,6 +30,7 @@ from stage5_v2.pipeline import Stage5PipelineV2
 from stage5_v2.reid_rknn import RKNNOSNetEmbedder, VALIDATED_RK3576_SHA256
 from stage5_v2.tracker import BotSortTrackerAdapter
 from stage6.rotated_depth import RotatedDepthAdapter
+from stage6.intent_adapter import AuthorizedGestureIntentAdapter
 
 
 class TrackedRotatedDepthAdapter(RotatedDepthAdapter):
@@ -89,15 +90,105 @@ def auto_validation_fields(record):
                 final_decision=decision)
 
 
+class Stage6DryRun:
+    """Use the production Stage6 intent/lease adapter without ROS or PX4 I/O."""
+
+    def __init__(self, log_path=None):
+        self.adapter = AuthorizedGestureIntentAdapter(300)
+        self.lock = threading.Lock()
+        self.decision = None
+        self.last_latency_ms = 0.0
+        self.last_frame_id = None
+        self.last_record = {}
+        self.last_key = None
+        self.last_logged_at = 0.0
+        self.log = None
+        if log_path is not None:
+            path = log_path.expanduser().resolve()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self.log = path.open("x", encoding="utf-8")
+
+    def submit(self, authorized, record):
+        start = time.perf_counter()
+        now_ms = time.monotonic_ns() // 1_000_000
+        with self.lock:
+            self.adapter.ingest(authorized, now_ms)
+            self.decision = self.adapter.tick(now_ms)
+            self.last_latency_ms = (time.perf_counter()-start)*1000.0
+            self.last_frame_id = record["frame_id"]
+            self.last_record = {
+                "timestamp_ms": record["timestamp_ms"],
+                "frame_id": record["frame_id"],
+                "ownership_state": record["ownership_state"],
+                "operator_session_id": record["operator_session_id"],
+                "current_track_id": record["current_track_id"],
+                "gesture_raw": record.get("gesture_raw"),
+                "gesture_stable": record.get("gesture_stable"),
+                "authorized_gesture": record["authorized_gesture"],
+                "depth_observations": record.get("depth_observations", []),
+            }
+            self._log_if_needed()
+
+    def tick(self):
+        with self.lock:
+            self.decision = self.adapter.tick(time.monotonic_ns() // 1_000_000)
+            self._log_if_needed()
+
+    def snapshot(self):
+        with self.lock:
+            decision = self.decision
+            motion = bool(decision and decision.valid and decision.intent != "HOVER")
+            return {
+                "stage6_enabled": True,
+                "output_mode": "DRY-RUN NO PX4 OUTPUT",
+                # Diagnostic alias: the dry-run adapter has no separate interaction_ready gate.
+                "interaction_ready": bool(decision and decision.valid),
+                "interaction_ready_source": "Stage6 AuthorizedGestureIntentAdapter decision.valid",
+                "stage6_intent": decision.intent if decision else "HOVER",
+                "lease_state": "ACTIVE" if motion else
+                    "EXPIRED" if decision and decision.reason == "VISION_COMMAND_TIMEOUT" else "INACTIVE",
+                "safety_state": "AUTHORIZED" if decision and decision.valid else "REJECTED",
+                "stage6_reason": decision.reason if decision else "NO_AUTHORIZED_GESTURE",
+                "stage6_latency_ms": self.last_latency_ms,
+                "stage6_frame_id": self.last_frame_id,
+                "stage6_decision": decision.to_dict() if decision else None,
+            }
+
+    def _log_if_needed(self):
+        if self.log is None or self.decision is None:
+            return
+        key = (self.last_frame_id, self.decision.intent, self.decision.valid,
+               self.decision.reason, self.last_record.get("ownership_state"))
+        now = time.monotonic()
+        if key[1:] != (self.last_key[1:] if self.last_key else None) or now-self.last_logged_at >= 1:
+            self.log.write(json.dumps({**self.last_record,
+                "output_mode": "DRY-RUN NO PX4 OUTPUT",
+                "interaction_ready": self.decision.valid,
+                "stage6_decision": self.decision.to_dict(),
+                "stage6_latency_ms": self.last_latency_ms}, allow_nan=False)+"\n")
+            self.log.flush()
+            self.last_logged_at = now
+        self.last_key = key
+
+    def close(self):
+        with self.lock:
+            self.adapter.clear("VISION_STOPPED")
+            self.decision = self.adapter.tick(time.monotonic_ns() // 1_000_000)
+            self._log_if_needed()
+            if self.log is not None:
+                self.log.close()
+
+
 PAGE = b"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stage5 Operator Lock</title>
 <style>body{margin:0;background:#17191d;color:#eee;font:16px sans-serif}
 main{padding:12px}canvas{display:block;max-width:100%;height:auto;background:#111}</style>
-<main><h2>Stage5 Operator Lock</h2><p>Visual-only. No PX4 output.</p>
+<main><h2>Stage5 Operator Lock</h2><p id="mode">Visual-only. No PX4 output.</p>
 <canvas id="preview" width="640" height="480"></canvas>
 <p id="status">Waiting for camera...</p><p id="reauth"></p>
 <p id="evidence"></p><p id="age"></p></main>
+<p id="stage6"></p>
 <script>
 const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');
 let lastSequence=0;
@@ -121,6 +212,10 @@ async function frame(){
 frame();
 setInterval(async()=>{try{const s=await(await fetch('/status',{cache:'no-store'})).json();
 const c=(s.acquisition_checks||[])[0]||{};
+if(s.stage6_enabled){
+document.getElementById('mode').textContent='STAGE3 > STAGE4 > STAGE5 > STAGE6 | DRY-RUN | NO PX4 OUTPUT';
+document.getElementById('stage6').textContent=`Pose ${s.pose_count?'FOUND':'INVALID'} | Quality ${s.operator_pose_valid?'PASS':'FAIL'} | Raw ${s.gesture_raw?.label||'-'} | Stable ${s.gesture_stable?.label||'-'} | Interaction ready (derived) ${s.interaction_ready} | Intent ${s.stage6_intent||'HOVER'} | Lease ${s.lease_state||'INACTIVE'} | Safety ${s.safety_state||'-'} | Reason ${s.stage6_reason||'-'} | Stage6 ${s.stage6_latency_ms?.toFixed(2)??'-'} ms`;
+}
 document.getElementById('status').textContent=`${s.ownership_state||'WAITING'} | UI ${s.ui_state||'-'} | Reject ${s.reject_reason||'-'} | Session ${s.operator_session_id||'-'} | Track ${s.current_track_id??'-'} | Pose ${s.pose_count??0} | People ${s.people_count??0} | T-Pose ${c.tpose_matched??'-'} | Pose valid ${c.pose_valid??'-'} | Crop ${c.crop_quality??'-'} | Pose ${s.pose_latency_ms?.toFixed(0)??'-'} ms | Stage5 ${s.latency_ms?.stage5_total?.toFixed(0)??'-'} ms | Loop ${s.analysis_fps??'-'} FPS | Depth ${s.latency_ms?.stereo_depth?.toFixed(0)??'-'} ms | Person depth ${s.operator_depth?.depth_m?.toFixed(2)??'-'} m | Age ${s.operator_depth?.age_ms?.toFixed(0)??'-'} ms | Valid ${s.operator_depth?.valid??'-'} | ROI ${JSON.stringify(s.depth_roi_shapes||[])}`;
 document.getElementById('reauth').textContent=`Auto Reauthorize ${s.auto_reauthorize_enabled?'ENABLED':'DISABLED'} | ${s.auto_reauthorize_state||'-'} | Lost session ${s.lost_operator_identity||'-'} | Old track ${s.current_track_id??'-'} | Candidate track ${s.auto_reauthorize_candidate_id??'-'} | Frames ${s.auto_reauthorize_frames??0} | Time ${s.auto_reauthorize_elapsed_ms??0} ms | Reason ${s.auto_reauthorize_reject_reason||'-'} | Decision ${s.final_decision||'-'}`;
 document.getElementById('evidence').textContent=`Gallery ${s.gallery_size??0} | Candidate ReID ${s.auto_reauthorize_reid_similarity?.toFixed(3)??'-'} | Best ${s.auto_reauthorize_gallery_max?.toFixed(3)??'-'} | TopK ${s.auto_reauthorize_gallery_topk_mean?.toFixed(3)??'-'} | Matches ${s.auto_reauthorize_gallery_match_count??'-'} | Second ${s.gallery_second_similarity?.toFixed(3)??'-'} | Margin ${s.auto_reauthorize_margin?.toFixed(3)??'-'} | Score ${s.auto_reauthorize_identity_score?.toFixed(3)??'-'} | Old/New session ${s.old_operator_session_id||'-'} / ${s.new_operator_session_id||'-'}`;
@@ -139,6 +234,7 @@ class PreviewState:
         self.status = {}
         self.stopped = False
         self.error = None
+        self.stage6 = None
 
     def publish_analysis(self, image, people, authorized, record, capture_ns, fps,
                          pose_count, pose_latency_ms):
@@ -184,7 +280,13 @@ class PreviewState:
                     "auto_reauthorize_reject_reason", "authorization_source",
                     "old_operator_session_id", "new_operator_session_id")},
                 capture_age_ms=round((time.monotonic_ns()-capture_ns)/1e6, 2),
+                gesture_raw=record.get("gesture_raw"),
+                gesture_stable=record.get("gesture_stable"),
+                operator_pose_valid=next((p["pose_valid"] for p in record.get("people", [])
+                    if p["track_id"] == record.get("current_track_id")), False),
             )
+            if self.stage6 is not None:
+                self.status.update(self.stage6.snapshot())
             self.condition.notify_all()
 
     def publish_jpeg(self, jpeg, capture_ns):
@@ -207,7 +309,7 @@ def make_handler(state):
         wbufsize = 0
 
         def log_message(self, format, *args):
-            if self.path == "/":
+            if getattr(self, "path", None) == "/":
                 print("HTTP " + format % args, flush=True)
 
         def send_no_cache(self):
@@ -223,6 +325,8 @@ def make_handler(state):
                 with state.condition:
                     payload = dict(state.status, stopped=state.stopped, error=state.error,
                                    preview_sequence=state.jpeg_sequence)
+                if state.stage6 is not None:
+                    payload.update(state.stage6.snapshot())
                 data, content_type = json.dumps(payload).encode(), "application/json"
                 extras = ()
             elif self.path == "/snapshot.jpg":
@@ -335,6 +439,8 @@ def camera_worker(args, state, server):
                 record["pose_inference_latency_ms"] = pose_frame.inference_latency_ms
                 record["capture_monotonic_ns"] = frame.timestamp_ns
                 record.update(auto_validation_fields(record))
+                if state.stage6 is not None:
+                    state.stage6.submit(authorized, record)
                 if log_handle is not None:
                     log_handle.write(json.dumps(record, allow_nan=False) + "\n")
                     log_handle.flush()
@@ -388,6 +494,10 @@ def parse_args(argv=None):
                         help="Enable the existing Stage5 experimental auto reauthorization")
     parser.add_argument("--log-jsonl", type=Path,
                         help="Write existing Stage5 frame records as JSONL (must be a new path)")
+    parser.add_argument("--stage6-dry-run", action="store_true",
+                        help="Run existing Stage6 intent/lease adapter in-process; no ROS or PX4 output")
+    parser.add_argument("--stage6-log-jsonl", type=Path,
+                        help="Stage6 state changes and periodic dry-run samples (new path)")
     args = parser.parse_args(argv)
     if not 320 <= args.preview_width <= 1280:
         parser.error("--preview-width must be within 320..1280")
@@ -401,6 +511,8 @@ def parse_args(argv=None):
 def main():
     args = parse_args()
     state = PreviewState()
+    if args.stage6_dry_run:
+        state.stage6 = Stage6DryRun(args.stage6_log_jsonl)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(state))
     server.daemon_threads = True
     renderer = threading.Thread(target=render_worker,
@@ -409,7 +521,16 @@ def main():
     worker = threading.Thread(target=camera_worker, args=(args, state, server), daemon=True)
     renderer.start()
     worker.start()
-    print(f"Stage5 preview: http://{args.host}:{args.port}/", flush=True)
+    def lease_clock():
+        while not state.stopped:
+            state.stage6.tick()
+            time.sleep(.05)
+    lease_thread = None
+    if state.stage6 is not None:
+        lease_thread = threading.Thread(target=lease_clock, daemon=True)
+        lease_thread.start()
+    print(f"{'Stage3-6 DRY-RUN NO PX4 OUTPUT' if state.stage6 else 'Stage5 preview'}: "
+          f"http://{args.host}:{args.port}/", flush=True)
     try:
         server.serve_forever(poll_interval=0.1)
     except KeyboardInterrupt:
@@ -419,6 +540,9 @@ def main():
         server.server_close()
         worker.join(timeout=7)
         renderer.join(timeout=7)
+        if lease_thread is not None:
+            lease_thread.join(timeout=2)
+            state.stage6.close()
     return 1 if state.error else 0
 
 

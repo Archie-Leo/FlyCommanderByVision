@@ -16,7 +16,8 @@ VALIDATED_RK3576_SHA256 = "b84b904776a33ad3f2dcbd5d113b0e820ae55c236d18a4ad32770
 class RKNNOSNetEmbedder:
     dimension = 512
 
-    def __init__(self, model_path: Path, expected_sha256: str | None = None, runtime_factory=None):
+    def __init__(self, model_path: Path, expected_sha256: str | None = None,
+                 runtime_factory=None, core_mask: int | None = None):
         path = Path(model_path).expanduser().resolve()
         if not path.is_file() or path.stat().st_size < 100_000:
             raise FileNotFoundError(f"RKNN OSNet model missing/invalid: {path}")
@@ -35,7 +36,9 @@ class RKNNOSNetEmbedder:
         try:
             if self.runtime.load_rknn(str(path)) != 0:
                 raise RuntimeError("RKNN OSNet model load failed")
-            if self.runtime.init_runtime() != 0:
+            init_status = (self.runtime.init_runtime() if core_mask is None
+                           else self.runtime.init_runtime(core_mask=int(core_mask)))
+            if init_status != 0:
                 raise RuntimeError("RKNN OSNet runtime initialization failed")
         except BaseException:
             self.close()

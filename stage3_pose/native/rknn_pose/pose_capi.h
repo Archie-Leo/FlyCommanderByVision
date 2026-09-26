@@ -23,6 +23,8 @@ typedef struct {
 
 int fcv_pose_abi_version(void);
 void* fcv_pose_create(const char* model_path);
+/* Optional scheduling experiment; 0 keeps the existing RKNN AUTO policy. */
+void* fcv_pose_create_with_core_mask(const char* model_path, int core_mask);
 int fcv_pose_infer(void* handle, const uint8_t* bgr, int width, int height,
                    int row_stride, int max_poses, fcv_pose_detection* detections,
                    int capacity, int* count, fcv_pose_timing* timing);

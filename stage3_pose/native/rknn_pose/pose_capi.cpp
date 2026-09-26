@@ -44,13 +44,17 @@ bool attr_shape(const rknn_tensor_attr& attr, int c, int h, int w) {
 extern "C" int fcv_pose_abi_version(void) { return FCV_POSE_ABI_VERSION; }
 extern "C" const char* fcv_pose_last_error(void) { return error.c_str(); }
 
-extern "C" void* fcv_pose_create(const char* model_path) {
+extern "C" void* fcv_pose_create_with_core_mask(const char* model_path, int core_mask) {
     error.clear();
     if (!model_path || !*model_path) { fail("RKNN Pose model path missing"); return nullptr; }
     try {
         auto runtime = std::make_unique<Runtime>();
         int rc = rknn_init(&runtime->app.rknn_ctx, const_cast<char*>(model_path), 0, 0, nullptr);
         if (rc != RKNN_SUCC) { fail("rknn_init failed: " + std::to_string(rc)); return nullptr; }
+        if (core_mask != 0) {
+            rc = rknn_set_core_mask(runtime->app.rknn_ctx, static_cast<rknn_core_mask>(core_mask));
+            if (rc != RKNN_SUCC) { fail("rknn_set_core_mask failed: " + std::to_string(rc)); return nullptr; }
+        }
         rc = rknn_query(runtime->app.rknn_ctx, RKNN_QUERY_IN_OUT_NUM,
                         &runtime->app.io_num, sizeof(runtime->app.io_num));
         if (rc != RKNN_SUCC || runtime->app.io_num.n_input != 1 || runtime->app.io_num.n_output != 4) {
@@ -93,6 +97,10 @@ extern "C" void* fcv_pose_create(const char* model_path) {
         runtime->canvas.create(640, 640, CV_8UC3);
         return runtime.release();
     } catch (const std::exception& ex) { fail(ex.what()); return nullptr; }
+}
+
+extern "C" void* fcv_pose_create(const char* model_path) {
+    return fcv_pose_create_with_core_mask(model_path, 0);
 }
 
 extern "C" int fcv_pose_infer(void* handle, const uint8_t* bgr, int width, int height,

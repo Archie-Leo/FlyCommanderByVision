@@ -41,7 +41,7 @@ class _Timing(c.Structure):
 class NativePoseRuntime:
     """Small ctypes ABI; no raw model tensors cross into Python."""
 
-    def __init__(self, library_path: Path, model_path: Path):
+    def __init__(self, library_path: Path, model_path: Path, core_mask: int | None = None):
         library = Path(library_path).expanduser().resolve()
         if not library.is_file():
             raise FileNotFoundError(f"RKNN Pose native library missing: {library}")
@@ -57,7 +57,13 @@ class NativePoseRuntime:
                                             c.c_int, c.POINTER(c.c_int), c.POINTER(_Timing)]
         self.lib.fcv_pose_infer.restype = c.c_int
         self.lib.fcv_pose_destroy.argtypes = [c.c_void_p]
-        self.handle = self.lib.fcv_pose_create(str(model_path).encode())
+        if core_mask is None or core_mask == 0:
+            self.handle = self.lib.fcv_pose_create(str(model_path).encode())
+        else:
+            self.lib.fcv_pose_create_with_core_mask.argtypes = [c.c_char_p, c.c_int]
+            self.lib.fcv_pose_create_with_core_mask.restype = c.c_void_p
+            self.handle = self.lib.fcv_pose_create_with_core_mask(
+                str(model_path).encode(), int(core_mask))
         if not self.handle:
             raise RuntimeError(self._error())
 
@@ -95,7 +101,8 @@ class RKNNPoseBackend(PoseBackend):
     name = "rknn_yolov8n_pose_int8"
 
     def __init__(self, config: BackendConfig, model_path: Path, library_path: Path,
-                 expected_sha256: str | None = MODEL_SHA256, runtime_factory=NativePoseRuntime):
+                 expected_sha256: str | None = MODEL_SHA256, runtime_factory=NativePoseRuntime,
+                 core_mask: int | None = None):
         self.model_path = Path(model_path).expanduser().resolve()
         if not self.model_path.is_file() or self.model_path.stat().st_size < 100_000:
             raise FileNotFoundError(f"RKNN Pose model missing/invalid: {self.model_path}")
@@ -105,7 +112,8 @@ class RKNNPoseBackend(PoseBackend):
         if not 1 <= config.num_poses <= 128:
             raise ValueError("RKNN Pose num_poses must be in 1..128")
         self.max_poses = config.num_poses
-        self.runtime = runtime_factory(library_path, self.model_path)
+        self.runtime = (runtime_factory(library_path, self.model_path) if core_mask is None
+                        else runtime_factory(library_path, self.model_path, core_mask=core_mask))
         self.lock = threading.Lock()
         self.last_timestamp_ms = -1
         self.last_timings = {}

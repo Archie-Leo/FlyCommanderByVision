@@ -25,6 +25,7 @@ from pose.factory import create_pose_backend
 from pose.normalize import SkeletonNormalizer
 from pose.quality import PoseQualityEvaluator
 from stage5_v2.depth import StereoPersonDepthAdapter
+from stage5_v2.ownership import Settings
 from stage5_v2.pipeline import Stage5PipelineV2
 from stage5_v2.reid_rknn import RKNNOSNetEmbedder, VALIDATED_RK3576_SHA256
 from stage5_v2.tracker import BotSortTrackerAdapter
@@ -62,6 +63,32 @@ class TrackedRotatedDepthAdapter(RotatedDepthAdapter):
         raise AttributeError(name)
 
 
+def auto_validation_fields(record):
+    """Aliases for the existing Stage5 frame record, without new decisions."""
+    second = record.get("second_candidate") or {}
+    auto_state = record.get("auto_reauthorize_state")
+    decision = ("AUTHORIZED" if record.get("ownership_state") == "LOCKED_HIGH"
+                and auto_state == "SUCCESS"
+                and record.get("authorization_source") == "AUTO_REAUTHORIZE" else
+                "CONFIRMING" if auto_state == "CONFIRMING" else
+                "REJECTED" if record.get("ownership_state") == "OPERATOR_LOST"
+                and record.get("auto_reauthorize_reject_reason") not in
+                (None, "AUTO_REAUTH_NO_CANDIDATE", "AUTO_REAUTH_DISABLED") else "NONE")
+    return dict(stage5_state=record.get("ownership_state"),
+                operator_track_id=record.get("current_track_id"),
+                lost_operator_identity=(record.get("operator_session_id")
+                    if record.get("ownership_state") in
+                    ("OPERATOR_LOST", "AUTO_REAUTHORIZE_CONFIRMING", "REAUTHORIZING") else None),
+                candidate_track_id=record.get("auto_reauthorize_candidate_id"),
+                reid_similarity=record.get("auto_reauthorize_reid_similarity"),
+                gallery_best=record.get("auto_reauthorize_gallery_max"),
+                gallery_second=second.get("S_reid"),
+                gallery_second_similarity=second.get("S_reid"),
+                margin=record.get("auto_reauthorize_margin"),
+                confirm_count=record.get("auto_reauthorize_frames"),
+                final_decision=decision)
+
+
 PAGE = b"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stage5 Operator Lock</title>
@@ -69,7 +96,8 @@ PAGE = b"""<!doctype html><html lang="en"><meta charset="utf-8">
 main{padding:12px}canvas{display:block;max-width:100%;height:auto;background:#111}</style>
 <main><h2>Stage5 Operator Lock</h2><p>Visual-only. No PX4 output.</p>
 <canvas id="preview" width="640" height="480"></canvas>
-<p id="status">Waiting for camera...</p><p id="age"></p></main>
+<p id="status">Waiting for camera...</p><p id="reauth"></p>
+<p id="evidence"></p><p id="age"></p></main>
 <script>
 const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');
 let lastSequence=0;
@@ -94,6 +122,8 @@ frame();
 setInterval(async()=>{try{const s=await(await fetch('/status',{cache:'no-store'})).json();
 const c=(s.acquisition_checks||[])[0]||{};
 document.getElementById('status').textContent=`${s.ownership_state||'WAITING'} | UI ${s.ui_state||'-'} | Reject ${s.reject_reason||'-'} | Session ${s.operator_session_id||'-'} | Track ${s.current_track_id??'-'} | Pose ${s.pose_count??0} | People ${s.people_count??0} | T-Pose ${c.tpose_matched??'-'} | Pose valid ${c.pose_valid??'-'} | Crop ${c.crop_quality??'-'} | Pose ${s.pose_latency_ms?.toFixed(0)??'-'} ms | Stage5 ${s.latency_ms?.stage5_total?.toFixed(0)??'-'} ms | Loop ${s.analysis_fps??'-'} FPS | Depth ${s.latency_ms?.stereo_depth?.toFixed(0)??'-'} ms | Person depth ${s.operator_depth?.depth_m?.toFixed(2)??'-'} m | Age ${s.operator_depth?.age_ms?.toFixed(0)??'-'} ms | Valid ${s.operator_depth?.valid??'-'} | ROI ${JSON.stringify(s.depth_roi_shapes||[])}`;
+document.getElementById('reauth').textContent=`Auto Reauthorize ${s.auto_reauthorize_enabled?'ENABLED':'DISABLED'} | ${s.auto_reauthorize_state||'-'} | Lost session ${s.lost_operator_identity||'-'} | Old track ${s.current_track_id??'-'} | Candidate track ${s.auto_reauthorize_candidate_id??'-'} | Frames ${s.auto_reauthorize_frames??0} | Time ${s.auto_reauthorize_elapsed_ms??0} ms | Reason ${s.auto_reauthorize_reject_reason||'-'} | Decision ${s.final_decision||'-'}`;
+document.getElementById('evidence').textContent=`Gallery ${s.gallery_size??0} | Candidate ReID ${s.auto_reauthorize_reid_similarity?.toFixed(3)??'-'} | Best ${s.auto_reauthorize_gallery_max?.toFixed(3)??'-'} | TopK ${s.auto_reauthorize_gallery_topk_mean?.toFixed(3)??'-'} | Matches ${s.auto_reauthorize_gallery_match_count??'-'} | Second ${s.gallery_second_similarity?.toFixed(3)??'-'} | Margin ${s.auto_reauthorize_margin?.toFixed(3)??'-'} | Score ${s.auto_reauthorize_identity_score?.toFixed(3)??'-'} | Old/New session ${s.old_operator_session_id||'-'} / ${s.new_operator_session_id||'-'}`;
 }catch(_){document.getElementById('status').textContent='Preview disconnected';}},500)
 </script></html>"""
 
@@ -139,6 +169,20 @@ class PreviewState:
                 depth_profile_ms=record.get("depth_profile_ms", {}),
                 acquisition_checks=record.get("acquisition_checks", []),
                 best_candidate=record.get("best_candidate"),
+                timestamp_ms=record.get("timestamp_ms"),
+                gallery_size=record.get("gallery_size"),
+                lost_operator_identity=record.get("lost_operator_identity"),
+                gallery_second_similarity=record.get("gallery_second_similarity"),
+                final_decision=record.get("final_decision"),
+                **{key: record.get(key) for key in (
+                    "auto_reauthorize_enabled", "auto_reauthorize_state",
+                    "auto_reauthorize_candidate_id", "auto_reauthorize_reid_similarity",
+                    "auto_reauthorize_gallery_max", "auto_reauthorize_gallery_topk_mean",
+                    "auto_reauthorize_gallery_match_count", "auto_reauthorize_identity_score",
+                    "auto_reauthorize_margin", "auto_reauthorize_frames",
+                    "auto_reauthorize_elapsed_ms", "auto_reauthorize_deadline_ms",
+                    "auto_reauthorize_reject_reason", "authorization_source",
+                    "old_operator_session_id", "new_operator_session_id")},
                 capture_age_ms=round((time.monotonic_ns()-capture_ns)/1e6, 2),
             )
             self.condition.notify_all()
@@ -247,8 +291,13 @@ def render_worker(state, width, quality, fps_cap):
 
 def camera_worker(args, state, server):
     embedder = tracker = None
+    log_handle = None
     error = None
     try:
+        if args.log_jsonl is not None:
+            log_path = args.log_jsonl.expanduser().resolve()
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_handle = log_path.open("x", encoding="utf-8")
         embedder = RKNNOSNetEmbedder(args.reid_model,
                                     expected_sha256=VALIDATED_RK3576_SHA256)
         depth = StereoPersonDepthAdapter(
@@ -258,7 +307,9 @@ def camera_worker(args, state, server):
             depth_max_age_ms=args.depth_max_age_ms)
         analysis_depth = TrackedRotatedDepthAdapter(depth)
         tracker = BotSortTrackerAdapter(args.boxmot_lib)
-        pipeline = Stage5PipelineV2(tracker, embedder, analysis_depth, roi_depth=True)
+        pipeline = Stage5PipelineV2(
+            tracker, embedder, analysis_depth, roi_depth=True,
+            ownership_settings=Settings(auto_reauthorize_enabled=args.auto_reauthorize))
         config = AppConfig(camera=replace(CameraConfig(), device=args.camera),
                            backend=replace(BackendConfig(), num_poses=4))
         evaluator = PoseQualityEvaluator(config.quality)
@@ -281,6 +332,12 @@ def camera_worker(args, state, server):
                     frame.left_raw, right, pose_frame, evaluator, normalizer,
                     rectified_left=analysis_left)
                 record["rectify_ms"] = rectify_ms
+                record["pose_inference_latency_ms"] = pose_frame.inference_latency_ms
+                record["capture_monotonic_ns"] = frame.timestamp_ns
+                record.update(auto_validation_fields(record))
+                if log_handle is not None:
+                    log_handle.write(json.dumps(record, allow_nan=False) + "\n")
+                    log_handle.flush()
                 processed += 1
                 fps = processed/max(1e-6, time.monotonic()-started)
                 state.publish_analysis(image, people, authorized, record,
@@ -292,6 +349,8 @@ def camera_worker(args, state, server):
         error = exc
         print(f"Stage5 camera error: {exc}", file=sys.stderr, flush=True)
     finally:
+        if log_handle is not None:
+            log_handle.close()
         if tracker is not None:
             tracker.close()
         if embedder is not None:
@@ -301,7 +360,7 @@ def camera_worker(args, state, server):
             server.shutdown()
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--camera", default=os.environ.get("FCV_CAMERA_DEVICE", "/dev/video73"))
     parser.add_argument("--calibration", type=Path,
@@ -324,13 +383,23 @@ def main():
     parser.add_argument("--depth-roi-margin-ratio", type=float, default=.10)
     parser.add_argument("--depth-rate-hz", type=float, default=5.)
     parser.add_argument("--depth-max-age-ms", type=int, default=500)
-    args = parser.parse_args()
+    parser.add_argument("--auto-reauthorize", "--enable-auto-reauthorize",
+                        dest="auto_reauthorize", action="store_true",
+                        help="Enable the existing Stage5 experimental auto reauthorization")
+    parser.add_argument("--log-jsonl", type=Path,
+                        help="Write existing Stage5 frame records as JSONL (must be a new path)")
+    args = parser.parse_args(argv)
     if not 320 <= args.preview_width <= 1280:
         parser.error("--preview-width must be within 320..1280")
     if not 30 <= args.jpeg_quality <= 90:
         parser.error("--jpeg-quality must be within 30..90")
     if not 1 <= args.preview_fps <= 30:
         parser.error("--preview-fps must be within 1..30")
+    return args
+
+
+def main():
+    args = parse_args()
     state = PreviewState()
     server = ThreadingHTTPServer((args.host, args.port), make_handler(state))
     server.daemon_threads = True

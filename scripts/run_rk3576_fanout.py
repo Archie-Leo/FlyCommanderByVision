@@ -44,6 +44,9 @@ from stage5_v2.reid_rknn import RKNNOSNetEmbedder, VALIDATED_RK3576_SHA256
 from stage5_v2.tracker import BotSortTrackerAdapter
 from preview_stage5_web import Stage6DryRun, TrackedRotatedDepthAdapter
 from async_depth import AsyncTrackedRotatedDepthAdapter
+from ground_station.board_snapshot import build_visual_snapshot
+from ground_station.coordinate_adapter import RectifiedAnalysisToVideoDisplayAdapter
+from ground_station.sender import MetadataSender
 
 
 def pipeline_description(args):
@@ -376,6 +379,9 @@ def parse_args():
     p.add_argument("--boxmot-lib", type=Path, default=ROOT / "stage5_operator/build/botsort/botsort_capi.so")
     p.add_argument("--metrics-jsonl", type=Path)
     p.add_argument("--stage6-jsonl", type=Path)
+    p.add_argument("--metadata-host", help="Optional read-only UDP ground-station destination")
+    p.add_argument("--metadata-port", type=int, default=5601)
+    p.add_argument("--metadata-hz", type=float, default=20)
     return p.parse_args()
 
 
@@ -383,6 +389,12 @@ def main():
     args = parse_args()
     if args.async_depth and not args.async_perception:
         raise ValueError("--async-depth requires --async-perception")
+    if args.metadata_host:
+        ipaddress.ip_address(args.metadata_host)
+        if args.no_ai:
+            raise ValueError("metadata requires the AI branch")
+        if not 1 <= args.metadata_port <= 65535 or not 1 <= args.metadata_hz <= 30:
+            raise ValueError("invalid metadata port or rate")
     description = pipeline_description(args)
     Gst.init(None)
     pipeline = Gst.parse_launch(description)
@@ -404,6 +416,9 @@ def main():
     bus = pipeline.get_bus()
     embedder = tracker = dry_run = analysis_depth = None
     metrics = None
+    metadata_sender = None
+    metadata_adapter = None
+    metadata_snapshot_errors = 0
     started = time.monotonic()
     last_report_at = started
     last_cpu_at = os.times()
@@ -445,6 +460,13 @@ def main():
             evaluator = PoseQualityEvaluator(config.quality)
             normalizer = SkeletonNormalizer(config.normalization)
             dry_run = Stage6DryRun(args.stage6_jsonl)
+            if args.metadata_host:
+                try:
+                    metadata_adapter = RectifiedAnalysisToVideoDisplayAdapter(*depth.maps[0])
+                    metadata_sender = MetadataSender(args.metadata_host, args.metadata_port,
+                                                      args.metadata_hz, dry_run=dry_run)
+                except (OSError, ValueError) as exc:
+                    print(f"Metadata disabled: {exc}", file=sys.stderr, flush=True)
             lease_thread = threading.Thread(target=run_lease_clock, args=(dry_run, lease_stop),
                                             name="stage6-lease", daemon=True)
             lease_thread.start()
@@ -464,7 +486,7 @@ def main():
             frame_id = 0
             paused_on_right = False
             def process_frame(frame, source):
-                nonlocal frame_id, state, intent, paused_on_right
+                nonlocal frame_id, state, intent, paused_on_right, metadata_snapshot_errors
                 source_id, age_ms, gst_pts_ns, stage_times = source
                 split_start = time.perf_counter_ns()
                 right = frame.raw_sbs[:, 1280:].copy()
@@ -489,6 +511,13 @@ def main():
                 if args.async_depth:
                     stage_times["async_depth"] = analysis_depth.status()
                 dry_run.submit(authorized, record)
+                if metadata_sender is not None:
+                    try:
+                        visual = build_visual_snapshot(pose_frame, people, record,
+                                                       source_id, metadata_adapter)
+                        metadata_sender.publish(visual, frame.timestamp_ns)
+                    except Exception:
+                        metadata_snapshot_errors += 1
                 stage6_snapshot = dry_run.snapshot()
                 frame_age_at_output_ms = (time.monotonic_ns()-frame.timestamp_ns)/1e6
                 decision = stage6_snapshot["stage6_decision"]
@@ -592,6 +621,10 @@ def main():
                         "q_ai": pipeline.get_by_name("q_ai").get_property("current-level-buffers"),
                         "mem_available_kb": available_kb(), "max_temp_c": temperature_c(),
                         "output_mode": "DRY-RUN NO PX4 OUTPUT"}
+                    if metadata_sender is not None:
+                        metadata_sender.set_rates(report["ai_fps"], report["video_fps"])
+                        report["metadata"] = metadata_sender.status()
+                        report["metadata_snapshot_errors"] = metadata_snapshot_errors
                     depth_samples = analysis_depth.drain_samples() if args.async_depth else []
                     if args.async_depth:
                         report["depth_effective_hz"] = round(len(depth_samples)/dt, 2)
@@ -629,6 +662,8 @@ def main():
         lease_stop.set()
         if lease_thread is not None:
             lease_thread.join(timeout=2)
+        if metadata_sender is not None:
+            metadata_sender.close()
         if dry_run is not None:
             dry_run.close()
         if args.async_depth and analysis_depth is not None:
@@ -649,6 +684,9 @@ def main():
             "video_encoded_frames": counters.video_count, "ai_processed_frames": counters.ai_count,
             "ai_dropped_source_frames": counters.ai_dropped,
             "elapsed_s": round(time.monotonic()-started, 3), "rss_kb": memory_kb()}
+    if metadata_sender is not None:
+        summary["metadata"] = metadata_sender.status()
+        summary["metadata_snapshot_errors"] = metadata_snapshot_errors
     print(json.dumps(summary), flush=True)
     return 1 if failed else 0
 

@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import statistics
 import sys
 import threading
 import time
@@ -23,7 +24,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "scripts")] + [str(ROOT / name) for name in
-                ("stage3_pose", "stage4_gesture", "stage5_operator", "stage6_closed_loop")]
+                ("stage3_pose", "stage4_gesture", "stage5_operator", "stage6_closed_loop")] + [str(ROOT)]
 # Ubuntu's gi is installed for system Python; the vision venv deliberately omits
 # system site packages. Append only the gi location, after the vision packages.
 sys.path.append("/usr/lib/python3/dist-packages")
@@ -42,6 +43,7 @@ from stage5_v2.pipeline import Stage5PipelineV2
 from stage5_v2.reid_rknn import RKNNOSNetEmbedder, VALIDATED_RK3576_SHA256
 from stage5_v2.tracker import BotSortTrackerAdapter
 from preview_stage5_web import Stage6DryRun, TrackedRotatedDepthAdapter
+from async_depth import AsyncTrackedRotatedDepthAdapter
 
 
 def pipeline_description(args):
@@ -72,6 +74,9 @@ def pipeline_description(args):
         "! rtph264pay pt=96 config-interval=-1 mtu=1200 "
         f"! udpsink host={args.host} port={args.port} sync=false async=false"
     )
+    ai_format = ("video/x-raw,format=NV12,width=2560,height=960" if
+                 getattr(args, "async_perception", False) else
+                 "videoconvert ! video/x-raw,format=BGR,width=2560,height=960")
     return (
         f"v4l2src name=camera device={args.camera} io-mode=2 do-timestamp=true "
         f"! image/jpeg,width=2560,height=960,framerate={args.camera_fps}/1 "
@@ -79,8 +84,7 @@ def pipeline_description(args):
         "dma-feature=false ! video/x-raw,format=NV12,width=2560,height=960 "
         "! tee name=decoded "
         f"{video_branch} "
-        f"decoded. ! {queue('q_ai')} ! videoconvert "
-        "! video/x-raw,format=BGR,width=2560,height=960 "
+        f"decoded. ! {queue('q_ai')} ! {ai_format} "
         "! appsink name=ai_sink max-buffers=1 drop=true sync=false "
         "emit-signals=false enable-last-sample=false wait-on-eos=false"
     )
@@ -96,6 +100,8 @@ class Counters:
         self.compressed_stamps = OrderedDict()
         self.decoded_stamps = OrderedDict()
         self.decoded_count = 0
+        self.ai_convert_starts = OrderedDict()
+        self.ai_convert_ms = OrderedDict()
         self.max_pts_delta_ms = 0.0
         self.probe_error = None
         self.ai_count = 0
@@ -106,6 +112,7 @@ class Counters:
         self.stage5_ms = deque(maxlen=8192)
         self.reid_ms = deque(maxlen=8192)
         self.depth_ms = deque(maxlen=8192)
+
 
     def source_probe(self, pad, info):
         buffer = info.get_buffer()
@@ -155,6 +162,30 @@ class Counters:
         with self.lock:
             return self.decoded_stamps.get(int(pts))
 
+    def ai_convert_start_probe(self, pad, info):
+        buffer = info.get_buffer()
+        if buffer is not None:
+            with self.lock:
+                self.ai_convert_starts[int(buffer.pts)] = time.perf_counter_ns()
+                if len(self.ai_convert_starts) > 512:
+                    self.ai_convert_starts.popitem(last=False)
+        return Gst.PadProbeReturn.OK
+
+    def ai_convert_end_probe(self, pad, info):
+        buffer = info.get_buffer()
+        if buffer is not None:
+            with self.lock:
+                start = self.ai_convert_starts.pop(int(buffer.pts), None)
+                if start is not None:
+                    self.ai_convert_ms[int(buffer.pts)] = (time.perf_counter_ns()-start)/1e6
+                    if len(self.ai_convert_ms) > 512:
+                        self.ai_convert_ms.popitem(last=False)
+        return Gst.PadProbeReturn.OK
+
+    def take_ai_convert_ms(self, pts):
+        with self.lock:
+            return self.ai_convert_ms.pop(int(pts), None)
+
     def add_ai(self, source_id, age_ms, pose_ms, latency):
         with self.lock:
             self.ai_count += 1
@@ -168,21 +199,81 @@ class Counters:
             self.depth_ms.append(latency.get("stereo_depth", 0.0))
 
 
-def read_frame(sink, counters, frame_id):
-    sample = sink.emit("try-pull-sample", Gst.SECOND // 2)
-    if sample is None:
-        return None, None
+class LatestFrameSlot:
+    """One ref-counted Gst.Sample; replacing an unread sample drops the old one."""
+
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.latest = None
+        self.published = 0
+        self.replaced = 0
+        self.closed = False
+        self.callback_tid = None
+        self.callback_ms = deque(maxlen=1024)
+
+    def publish(self, sample):
+        start = time.perf_counter_ns()
+        with self.condition:
+            if self.closed:
+                return False
+            if self.latest is not None:
+                self.replaced += 1
+            self.latest = (sample, time.monotonic_ns())
+            self.published += 1
+            self.callback_tid = threading.get_native_id()
+            self.condition.notify()
+            self.callback_ms.append((time.perf_counter_ns()-start)/1e6)
+        return True
+
+    def take(self, timeout=.1):
+        with self.condition:
+            if self.latest is None and not self.closed:
+                self.condition.wait(timeout)
+            item, self.latest = self.latest, None
+            return item
+
+    def close(self):
+        with self.condition:
+            self.closed = True
+            self.latest = None
+            self.condition.notify_all()
+
+    def status(self):
+        with self.condition:
+            times = sorted(self.callback_ms)
+            return {"size": int(self.latest is not None),
+                    "published": self.published, "replaced": self.replaced,
+                    "callback_tid": self.callback_tid,
+                    "callback_mean_ms": round(statistics.mean(times), 3) if times else None,
+                    "callback_p95_ms": round(times[int((len(times)-1)*.95)], 3) if times else None}
+
+
+def decode_sample(sample, counters, frame_id, *, nv12=False, acquire_ms=0.0):
     buffer = sample.get_buffer()
     caps = sample.get_caps().get_structure(0)
-    if caps.get_string("format") != "BGR" or caps.get_value("width") != 2560 or caps.get_value("height") != 960:
+    if caps.get_string("format") != ("NV12" if nv12 else "BGR") or \
+            caps.get_value("width") != 2560 or caps.get_value("height") != 960:
         raise RuntimeError("AI appsink negotiated an unexpected pixel format/shape")
     mapped, memory = buffer.map(Gst.MapFlags.READ)
     if not mapped:
         raise RuntimeError("Cannot map AI Gst.Buffer")
     try:
-        raw = np.frombuffer(memory.data, dtype=np.uint8).copy().reshape(960, 2560, 3)
+        copy_start = time.perf_counter_ns()
+        if nv12:
+            pixels = np.frombuffer(memory.data, dtype=np.uint8).copy()
+            if pixels.size != 2560 * 960 * 3 // 2:
+                raise RuntimeError("Unexpected NV12 layout/padding at AI appsink")
+            raw_nv12 = pixels.reshape(1440, 2560)
+        else:
+            raw = np.frombuffer(memory.data, dtype=np.uint8).copy().reshape(960, 2560, 3)
+        copy_ms = (time.perf_counter_ns()-copy_start)/1e6
     finally:
         buffer.unmap(memory)
+    convert_ms = counters.take_ai_convert_ms(buffer.pts)
+    if nv12:
+        convert_start = time.perf_counter_ns()
+        raw = cv2.cvtColor(raw_nv12, cv2.COLOR_YUV2BGR_NV12)
+        convert_ms = (time.perf_counter_ns()-convert_start)/1e6
     source = counters.source_for(buffer.pts)
     if source is None:
         with counters.lock:
@@ -193,7 +284,20 @@ def read_frame(sink, counters, frame_id):
     frame = CameraFrame(frame_id, capture_ns, raw, raw[:, :1280], age_ms)
     # The processed frame_id is contiguous for Stage4 temporal semantics;
     # source_id separately reveals dropped camera frames.
-    return frame, (source_id, age_ms, int(buffer.pts))
+    return frame, (source_id, age_ms, int(buffer.pts), {
+        "buffer_acquire_ms": acquire_ms,
+        "full_sbs_copy_ms": copy_ms,
+        "nv12_to_bgr_ms": convert_ms,
+    })
+
+
+def read_frame(sink, counters, frame_id):
+    acquire_start = time.perf_counter_ns()
+    sample = sink.emit("try-pull-sample", Gst.SECOND // 2)
+    if sample is None:
+        return None, None
+    acquire_ms = (time.perf_counter_ns()-acquire_start)/1e6
+    return decode_sample(sample, counters, frame_id, acquire_ms=acquire_ms)
 
 
 def memory_kb():
@@ -258,6 +362,12 @@ def parse_args():
     p.add_argument("--no-ai", action="store_true", help="Video baseline with AI appsink still bounded")
     p.add_argument("--no-video", action="store_true", help="AI baseline with video branch replaced by fakesink")
     p.add_argument("--ai-sleep-ms", type=float, default=0, help="Test-only AI slowdown")
+    p.add_argument("--pause-on-right-ms", type=float, default=0,
+                   help="Test-only one-time Perception stall after valid RIGHT")
+    p.add_argument("--async-perception", action="store_true",
+                   help="V2 bounded NV12 sample slot and perception worker")
+    p.add_argument("--async-depth", action="store_true",
+                   help="V2 single bounded 5 Hz tracked ROI depth worker")
     p.add_argument("--auto-reauthorize", action="store_true")
     p.add_argument("--calibration", type=Path, default=Path(os.environ.get("FCV_CALIBRATION_PATH", ROOT / "configs/calibration/run_b.yaml")))
     p.add_argument("--pose-model", type=Path, default=Path(os.environ.get("FCV_POSE_MODEL_PATH", "")))
@@ -271,6 +381,8 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.async_depth and not args.async_perception:
+        raise ValueError("--async-depth requires --async-perception")
     description = pipeline_description(args)
     Gst.init(None)
     pipeline = Gst.parse_launch(description)
@@ -283,10 +395,14 @@ def main():
     camera.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, counters.source_probe)
     jpeg_parser.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, counters.compressed_probe)
     decoder.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, counters.decoder_probe)
+    if not args.async_perception:
+        pipeline.get_by_name("q_ai").get_static_pad("src").add_probe(
+            Gst.PadProbeType.BUFFER, counters.ai_convert_start_probe)
+        sink.get_static_pad("sink").add_probe(Gst.PadProbeType.BUFFER, counters.ai_convert_end_probe)
     if parser is not None:
         parser.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, counters.video_probe)
     bus = pipeline.get_bus()
-    embedder = tracker = dry_run = None
+    embedder = tracker = dry_run = analysis_depth = None
     metrics = None
     started = time.monotonic()
     last_report_at = started
@@ -297,6 +413,20 @@ def main():
     failed = None
     lease_stop = threading.Event()
     lease_thread = None
+    perception_thread = None
+    perception_stop = threading.Event()
+    perception_error = []
+    frame_slot = LatestFrameSlot() if args.async_perception and not args.no_ai else None
+    metrics_lock = threading.Lock()
+    if frame_slot is not None:
+        sink.set_property("emit-signals", True)
+        def on_ai_sample(appsink):
+            sample = appsink.emit("pull-sample")
+            if sample is None:
+                return Gst.FlowReturn.EOS
+            frame_slot.publish(sample)
+            return Gst.FlowReturn.OK
+        sink.connect("new-sample", on_ai_sample)
     try:
         if args.metrics_jsonl:
             path = args.metrics_jsonl.expanduser().resolve()
@@ -305,7 +435,8 @@ def main():
         if not args.no_ai:
             embedder = RKNNOSNetEmbedder(args.reid_model, expected_sha256=VALIDATED_RK3576_SHA256)
             depth = StereoPersonDepthAdapter(args.calibration, args.stage2_root)
-            analysis_depth = TrackedRotatedDepthAdapter(depth)
+            analysis_depth = (AsyncTrackedRotatedDepthAdapter(depth) if args.async_depth
+                              else TrackedRotatedDepthAdapter(depth))
             tracker = BotSortTrackerAdapter(args.boxmot_lib)
             stage5 = Stage5PipelineV2(tracker, embedder, analysis_depth, roi_depth=True,
                 ownership_settings=Settings(auto_reauthorize_enabled=args.auto_reauthorize))
@@ -331,48 +462,106 @@ def main():
             if backend_context is not None:
                 backend = backend_context.__enter__()
             frame_id = 0
+            paused_on_right = False
+            def process_frame(frame, source):
+                nonlocal frame_id, state, intent, paused_on_right
+                source_id, age_ms, gst_pts_ns, stage_times = source
+                split_start = time.perf_counter_ns()
+                right = frame.raw_sbs[:, 1280:].copy()
+                stage_times["split_right_copy_ms"] = (time.perf_counter_ns()-split_start)/1e6
+                rectify_start = time.perf_counter_ns()
+                original_left = cv2.remap(frame.left_raw, *depth.maps[0], cv2.INTER_LINEAR)
+                stage_times["rectify_left_ms"] = (time.perf_counter_ns()-rectify_start)/1e6
+                rotate_start = time.perf_counter_ns()
+                analysis_left = cv2.rotate(original_left, cv2.ROTATE_180)
+                stage_times["rotate_left_ms"] = (time.perf_counter_ns()-rotate_start)/1e6
+                analysis_depth.prepare(original_left, analysis_left)
+                pose_frame = backend.infer(analysis_left, frame.timestamp_ns//1_000_000, frame.frame_id)
+                stage_times["pose"] = backend.last_timings
+                image, people, authorized, record = stage5.process(
+                    frame.left_raw, right, pose_frame, evaluator, normalizer,
+                    rectified_left=analysis_left)
+                if args.async_depth:
+                    analysis_depth.set_identity(record["operator_session_id"],
+                                                record["ownership_state"])
+                stage_times["stage5"] = record.get("runtime_profile_ms", {})
+                stage_times["depth"] = record.get("depth_profile_ms", {})
+                if args.async_depth:
+                    stage_times["async_depth"] = analysis_depth.status()
+                dry_run.submit(authorized, record)
+                stage6_snapshot = dry_run.snapshot()
+                frame_age_at_output_ms = (time.monotonic_ns()-frame.timestamp_ns)/1e6
+                decision = stage6_snapshot["stage6_decision"]
+                state = record["ownership_state"]
+                intent = decision["intent"]
+                counters.add_ai(source_id, age_ms, pose_frame.inference_latency_ms, record["latency_ms"])
+                if metrics:
+                    item = {"output_mode": "DRY-RUN NO PX4 OUTPUT", "frame_id": frame_id,
+                            "source_frame_id": source_id, "capture_monotonic_ns": frame.timestamp_ns,
+                            "gst_pts_ns": gst_pts_ns, "frame_age_at_ai_start_ms": age_ms,
+                            "frame_age_at_ai_output_ms": frame_age_at_output_ms,
+                            "pose_ms": pose_frame.inference_latency_ms,
+                            "stage5_latency_ms": record["latency_ms"],
+                            "runtime_profile_ms": stage_times,
+                            "stage5_state": state, "stage4_raw": record.get("gesture_raw"),
+                            "stage4_stable": record.get("gesture_stable"),
+                            "stage6": decision,
+                            "stage6_latency_ms": stage6_snapshot["stage6_latency_ms"]}
+                    with metrics_lock:
+                        metrics.write(json.dumps(item, allow_nan=False)+"\n")
+                frame_id += 1
+                if (args.pause_on_right_ms and not paused_on_right and decision["valid"]
+                        and decision["intent"] == "MOVE_RIGHT"):
+                    paused_on_right = True
+                    pause_start_ms = time.monotonic_ns()//1_000_000
+                    if metrics:
+                        with metrics_lock:
+                            metrics.write(json.dumps({"event": "PERCEPTION_PAUSE_START",
+                                "frame_id": frame_id-1, "at_ms": pause_start_ms,
+                                "duration_ms": args.pause_on_right_ms})+"\n")
+                            metrics.flush()
+                    time.sleep(args.pause_on_right_ms/1000)
+                    if metrics:
+                        with metrics_lock:
+                            metrics.write(json.dumps({"event": "PERCEPTION_PAUSE_END",
+                                "frame_id": frame_id-1, "at_ms": time.monotonic_ns()//1_000_000,
+                                "stage6": dry_run.snapshot()["stage6_decision"]})+"\n")
+                            metrics.flush()
+                if args.ai_sleep_ms:
+                    time.sleep(args.ai_sleep_ms/1000)
+
+            if frame_slot is not None:
+                def perception_loop():
+                    try:
+                        while not perception_stop.is_set():
+                            latest = frame_slot.take()
+                            if latest is None:
+                                continue
+                            sample, arrival_ns = latest
+                            frame, source = decode_sample(sample, counters, frame_id, nv12=True)
+                            source[3]["slot_wait_ms"] = (time.monotonic_ns()-arrival_ns)/1e6
+                            process_frame(frame, source)
+                    except BaseException as exc:
+                        perception_error.append(exc)
+                        perception_stop.set()
+                perception_thread = threading.Thread(target=perception_loop,
+                    name="perception-worker", daemon=True)
+                perception_thread.start()
             while time.monotonic()-started < args.duration:
                 check_bus(bus)
                 if counters.probe_error:
                     raise RuntimeError(counters.probe_error)
                 if args.no_ai:
                     time.sleep(.05)
+                elif frame_slot is not None:
+                    if perception_error:
+                        raise RuntimeError("Perception worker failed") from perception_error[0]
+                    time.sleep(.02)
                 else:
                     frame, source = read_frame(sink, counters, frame_id)
                     if frame is None:
                         continue
-                    source_id, age_ms, gst_pts_ns = source
-                    right = frame.raw_sbs[:, 1280:].copy()
-                    original_left = cv2.remap(frame.left_raw, *depth.maps[0], cv2.INTER_LINEAR)
-                    analysis_left = cv2.rotate(original_left, cv2.ROTATE_180)
-                    analysis_depth.prepare(original_left, analysis_left)
-                    pose_frame = backend.infer(analysis_left, frame.timestamp_ns//1_000_000, frame.frame_id)
-                    image, people, authorized, record = stage5.process(
-                        frame.left_raw, right, pose_frame, evaluator, normalizer,
-                        rectified_left=analysis_left)
-                    dry_run.submit(authorized, record)
-                    stage6_snapshot = dry_run.snapshot()
-                    frame_age_at_output_ms = (time.monotonic_ns()-frame.timestamp_ns)/1e6
-                    decision = stage6_snapshot["stage6_decision"]
-                    state = record["ownership_state"]
-                    intent = decision["intent"]
-                    counters.add_ai(source_id, age_ms, pose_frame.inference_latency_ms, record["latency_ms"])
-                    if metrics:
-                        metrics.write(json.dumps({
-                            "output_mode": "DRY-RUN NO PX4 OUTPUT", "frame_id": frame_id,
-                            "source_frame_id": source_id, "capture_monotonic_ns": frame.timestamp_ns,
-                            "gst_pts_ns": gst_pts_ns, "frame_age_at_ai_start_ms": age_ms,
-                            "frame_age_at_ai_output_ms": frame_age_at_output_ms,
-                            "pose_ms": pose_frame.inference_latency_ms,
-                            "stage5_latency_ms": record["latency_ms"],
-                            "stage5_state": state, "stage4_raw": record.get("gesture_raw"),
-                            "stage4_stable": record.get("gesture_stable"),
-                            "stage6": decision,
-                            "stage6_latency_ms": stage6_snapshot["stage6_latency_ms"],
-                        }, allow_nan=False)+"\n")
-                    frame_id += 1
-                    if args.ai_sleep_ms:
-                        time.sleep(args.ai_sleep_ms/1000)
+                    process_frame(frame, source)
                 now = time.monotonic()
                 if now-last_report_at >= 5:
                     with counters.lock:
@@ -394,22 +583,43 @@ def main():
                         "stage6_intent": intent, "rss_kb": memory_kb(),
                         "process_cpu_pct": round(cpu_pct, 1),
                         "lease_thread_tid": lease_thread.native_id if lease_thread else None,
+                        "perception_thread_tid": perception_thread.native_id if perception_thread else None,
+                        "ai_callback_tid": frame_slot.callback_tid if frame_slot else None,
+                        "latest_frame_slot": frame_slot.status() if frame_slot else None,
+                        "async_depth": analysis_depth.status() if args.async_depth else None,
                         "q_source": pipeline.get_by_name("q_source").get_property("current-level-buffers"),
                         "q_video": pipeline.get_by_name("q_video").get_property("current-level-buffers"),
                         "q_ai": pipeline.get_by_name("q_ai").get_property("current-level-buffers"),
                         "mem_available_kb": available_kb(), "max_temp_c": temperature_c(),
                         "output_mode": "DRY-RUN NO PX4 OUTPUT"}
+                    depth_samples = analysis_depth.drain_samples() if args.async_depth else []
+                    if args.async_depth:
+                        report["depth_effective_hz"] = round(len(depth_samples)/dt, 2)
                     print(json.dumps(report), flush=True)
                     if metrics:
-                        metrics.write(json.dumps(report)+"\n")
-                        metrics.flush()
+                        with metrics_lock:
+                            metrics.write(json.dumps(report)+"\n")
+                            if depth_samples:
+                                metrics.write(json.dumps({"event": "DEPTH_BATCH",
+                                    "elapsed_s": round(now-started, 2),
+                                    "samples": depth_samples})+"\n")
+                            metrics.flush()
                     last_report_at = now
                     last_cpu_at = cpu_now
                     last_source_count, last_video_count, last_ai_count = src, vid, ai
                     last_video_bytes = vid_bytes
         finally:
-            if backend_context is not None:
-                backend_context.__exit__(None, None, None)
+            perception_stop.set()
+            if frame_slot is not None:
+                frame_slot.close()
+            try:
+                if perception_thread is not None:
+                    perception_thread.join()
+            finally:
+                if backend_context is not None:
+                    backend_context.__exit__(None, None, None)
+            if perception_error:
+                raise RuntimeError("Perception worker failed") from perception_error[0]
     except KeyboardInterrupt:
         pass
     except Exception as exc:
@@ -421,6 +631,8 @@ def main():
             lease_thread.join(timeout=2)
         if dry_run is not None:
             dry_run.close()
+        if args.async_depth and analysis_depth is not None:
+            analysis_depth.close()
         pipeline.set_state(Gst.State.NULL)
         if tracker is not None:
             tracker.close()

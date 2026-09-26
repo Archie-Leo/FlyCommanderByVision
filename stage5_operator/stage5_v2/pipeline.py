@@ -28,6 +28,7 @@ class Stage5PipelineV2:
         # expensive and is useful only for a current tracked observation.
         rectified, _ = self.depth.process(left_raw, right_raw, [],
                                           rectified_left=rectified_left)
+        rectified_at = time.perf_counter()
         embeddings = []; qualities = []; keep = []
         osnet_total_ms = 0.0
         for i, pose in enumerate(poses):
@@ -37,8 +38,10 @@ class Stage5PipelineV2:
                 keep.append(i)
                 embeddings.append(vector)
                 qualities.append(quality)
+        reid_at = time.perf_counter()
         rows = self.tracker.update(rectified, [poses[i].bbox_xyxy for i in keep],
                                    [float(poses[i].pose_score or 0.) for i in keep], embeddings)
+        tracking_at = time.perf_counter()
         tracked_sources = list(dict.fromkeys(
             keep[row["detection_index"]] for row in rows
             if 0 <= row["detection_index"] < len(keep)))
@@ -57,6 +60,7 @@ class Stage5PipelineV2:
         else:
             _, tracked_depths = self.depth.process(
                 left_raw, right_raw, tracked_boxes, rectified_left=rectified)
+        depth_at = time.perf_counter()
         depths = dict(zip(tracked_sources, tracked_depths))
         people = []
         for row in rows:
@@ -72,9 +76,11 @@ class Stage5PipelineV2:
                 row["track_id"], pose_frame.timestamp_ms, pose_frame.frame_id,
                 row["bbox_xyxy"], row["confidence"], quality, skeleton,
                 embeddings[index], qualities[index], depths[source], hsv))
+        observations_at = time.perf_counter()
         fusion_start = time.perf_counter()
         self.ownership.update(people, pose_frame.timestamp_ms, pose_frame.frame_id)
         fusion_latency_ms = (time.perf_counter()-fusion_start)*1000.0
+        ownership_at = time.perf_counter()
         selected = self.ownership.selected
         key = (self.ownership.memory.operator_session_id, selected.track_id) if selected and self.ownership.memory else None
         if key != self._last_selected:
@@ -89,6 +95,7 @@ class Stage5PipelineV2:
             self.temporal.reset()
             self._last_selected = None
         authorized = self.ownership.authorize(gesture_stable, pose_frame.timestamp_ms, pose_frame.frame_id)
+        gesture_at = time.perf_counter()
         candidates = [c.to_dict() for c in self.ownership.candidates]
         memory = self.ownership.memory
         total_ms = (time.perf_counter()-start)*1000.0
@@ -129,6 +136,15 @@ class Stage5PipelineV2:
                            "ownership_fusion": fusion_latency_ms,
                            "stage5_total": total_ms,
                            "stage5_non_depth": max(0., total_ms-self.depth.last_latency_ms)},
+            "runtime_profile_ms": {
+                "rectified_input": (rectified_at-start)*1000.,
+                "reid_section": (reid_at-rectified_at)*1000.,
+                "tracking_section": (tracking_at-reid_at)*1000.,
+                "depth_section": (depth_at-tracking_at)*1000.,
+                "observations": (observations_at-depth_at)*1000.,
+                "ownership": (ownership_at-fusion_start)*1000.,
+                "stage4_authorize": (gesture_at-ownership_at)*1000.,
+            },
             "depth_mode": "ROI" if use_roi_depth else "FULL_FRAME",
             "depth_profile_ms": getattr(self.depth, "last_profile_ms", {}) if use_roi_depth else {},
             "depth_age_ms": getattr(self.depth, "last_depth_ages_ms", []) if use_roi_depth else [],

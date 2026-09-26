@@ -205,7 +205,7 @@ class StereoPersonDepthAdapter:
         if left.shape[:2] != self.size[::-1]:
             raise ValueError("Rectified LEFT size does not match Run B calibration")
         profile = dict(rectify=(time.perf_counter()-start)*1000, bbox_mapping=0.,
-                       roi_preparation=0., matcher=0., aggregation=0.)
+                       right_rectify=0., roi_preparation=0., matcher=0., aggregation=0.)
         results = []
         shapes = []
         for bbox in bboxes:
@@ -216,8 +216,10 @@ class StereoPersonDepthAdapter:
                 continue
             x0, y0, x1, y1 = bounds
             # Remap only the needed RIGHT pixels; LEFT was rectified for Pose.
+            remap_start = time.perf_counter()
             right = cv2.remap(right_raw, self.maps[1][0][y0:y1, x0:x1],
                               self.maps[1][1][y0:y1, x0:x1], cv2.INTER_LINEAR)
+            profile["right_rectify"] += (time.perf_counter()-remap_start)*1000
             left_gray = cv2.cvtColor(left[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
             right_gray = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
             profile["roi_preparation"] += (time.perf_counter()-prep_start)*1000

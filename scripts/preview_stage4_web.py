@@ -33,10 +33,36 @@ PAGE = b"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stage3 + Stage4 preview</title>
 <style>body{margin:0;background:#17191d;color:#f5f5f5;font:16px sans-serif}
-main{padding:12px}img{display:block;max-width:100%;height:auto;background:#111}</style>
+main{padding:12px}canvas{display:block;max-width:100%;height:auto;background:#111}</style>
 <main><h2>Stage3 + Stage4 visual preview</h2>
 <p>Rectified LEFT image; pose and gesture decisions use the original image.</p>
-<img src="/stream.mjpg" alt="Live Stage3 and Stage4 preview"></main></html>"""
+<canvas id="preview" width="640" height="480" aria-label="Live Stage3 and Stage4 preview"></canvas>
+<p id="timing">Waiting for frames...</p><p id="display-age"></p>
+<p><a href="/stream.mjpg">MJPEG stream</a></p></main>
+<script>
+const canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');
+let lastSequence=0;
+async function refreshFrame(){
+  const started=performance.now();
+  try{
+    const response=await fetch('/snapshot.jpg',{cache:'no-store',signal:AbortSignal.timeout(1000)});
+    if(!response.ok)throw Error('HTTP '+response.status);
+    const sequence=Number(response.headers.get('X-Preview-Sequence'));
+    if(sequence!==lastSequence){
+      const bitmap=await createImageBitmap(await response.blob());
+      canvas.width=bitmap.width;canvas.height=bitmap.height;
+      ctx.drawImage(bitmap,0,0);bitmap.close();lastSequence=sequence;
+      const age=Number(response.headers.get('X-Frame-Age-Ms'))+performance.now()-started;
+      document.getElementById('display-age').textContent=`Estimated age at display: ${age.toFixed(0)} ms`;
+    }
+  }catch(error){document.getElementById('display-age').textContent='Preview disconnected: '+error.message;}
+  setTimeout(refreshFrame,Math.max(0,100-(performance.now()-started)));
+}
+refreshFrame();
+setInterval(async()=>{try{const s=await(await fetch('/status',{cache:'no-store'})).json();
+document.getElementById('timing').textContent=`Analysis ${s.analysis_fps??0} FPS | Preview ${s.preview_fps??0} FPS | JPEG ${s.jpeg_encode_ms??0} ms | Frame age at HTTP send ${s.frame_age_at_send_ms??'--'} ms`;
+}catch(_){document.getElementById('timing').textContent='Preview disconnected';}},500)
+</script></html>"""
 
 
 class PreviewState:
@@ -52,6 +78,7 @@ class PreviewState:
         self.analysis = None
         self.analysis_sequence = 0
         self.render_error = None
+        self.last_send_sequence = 0
 
     def publish_analysis(self, analysis, status: dict):
         # One overwriteable slot: rendering can never hold up inference.
@@ -73,10 +100,20 @@ class PreviewState:
                 "display_frame_id": status["display_frame_id"],
                 "frame_ready_monotonic_ns": status["frame_ready_monotonic_ns"],
                 "host_receipt_age_at_publish_ms": status["host_receipt_age_at_publish_ms"],
+                "preview_fps": status.get("preview_fps", 0.0),
+                "jpeg_encode_ms": status.get("jpeg_encode_ms", 0.0),
+                "frame_age_ms": status.get("frame_age_ms", status["host_receipt_age_at_publish_ms"]),
             }
             self.status = dict(self.status, **self.display_status,
                                frames_displayed=self.sequence)
             self.condition.notify_all()
+
+    def note_send(self, sequence: int, frame_age_ms: float):
+        with self.condition:
+            if sequence >= self.last_send_sequence:
+                self.last_send_sequence = sequence
+                self.display_status["frame_age_at_send_ms"] = round(frame_age_ms, 2)
+                self.status = dict(self.status, **self.display_status)
 
     def fail_render(self, error):
         with self.condition:
@@ -92,18 +129,19 @@ class PreviewState:
             self.condition.notify_all()
 
 
-def draw_panel(frame, pose, quality, raw, stable, fps, pose_ms, total_ms,
-               dropped, display_mirror, display_width):
+def draw_panel(frame, pose, quality, raw, stable, analysis_fps, preview_fps,
+               pose_ms, total_ms, jpeg_ms, frame_age_ms, dropped,
+               input_rotate_180, display_mirror, preview_width):
     # draw_overlay only adds the existing canonical skeleton, bbox and Stage3
     # status. The top status band is replaced with Stage4 preview information.
-    canvas = draw_overlay(frame, pose, quality, fps, pose_ms, total_ms)
+    canvas = draw_overlay(frame, pose, quality, analysis_fps, pose_ms, total_ms)
     if display_mirror:
         canvas = cv2.flip(canvas, 1)  # Display only; inference has already ended.
-    if display_width < canvas.shape[1]:
-        display_height = round(canvas.shape[0] * display_width / canvas.shape[1])
-        canvas = cv2.resize(canvas, (display_width, display_height),
+    if preview_width < canvas.shape[1]:
+        display_height = round(canvas.shape[0] * preview_width / canvas.shape[1])
+        canvas = cv2.resize(canvas, (preview_width, display_height),
                             interpolation=cv2.INTER_AREA)
-    cv2.rectangle(canvas, (0, 0), (canvas.shape[1], 194), (0, 0, 0), -1)
+    cv2.rectangle(canvas, (0, 0), (canvas.shape[1], 218), (0, 0, 0), -1)
     confidence = quality.confidence_summary
     minimum = confidence.get("min")
     median = confidence.get("median")
@@ -114,30 +152,40 @@ def draw_panel(frame, pose, quality, raw, stable, fps, pose_ms, total_ms,
         f"REASON: {', '.join(quality.reasons) if quality.reasons else 'NONE'}",
         f"RAW: {raw.label.value} ({raw.score:.3f})",
         f"STABLE: {stable.label.value}  confirmed={stable.stable}  for={stable.stable_for_ms}ms",
-        f"FPS: {fps:.1f}  Pose: {pose_ms:.1f}ms  Loop: {total_ms:.1f}ms  Dropped: {dropped}",
+        f"ANALYSIS FPS: {analysis_fps:.1f}  PREVIEW FPS: {preview_fps:.1f}",
+        f"POSE: {pose_ms:.1f}ms  JPEG: {jpeg_ms:.1f}ms  LOOP: {total_ms:.1f}ms",
+        f"FRAME AGE (encode): {frame_age_ms:.1f}ms  DROPPED CAMERA: {dropped}",
         f"Required joint confidence: {confidence_text}",
+        f"INPUT ROTATION: {180 if input_rotate_180 else 0}  DISPLAY MIRROR: {'ON' if display_mirror else 'OFF'}",
     ]
     for index, line in enumerate(lines):
-        y = 28 + index * 30
+        y = 20 + index * 24
         color = (0, 220, 0) if index == 0 and quality.valid else (255, 255, 255)
         cv2.putText(canvas, line, (16, y), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.58, color, 1, cv2.LINE_AA)
+                    0.43, color, 1, cv2.LINE_AA)
     return canvas
 
 
 def make_handler(state: PreviewState):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
+        wbufsize = 0
+
+        def send_no_cache(self):
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
 
         def log_message(self, format, *args):
-            print("HTTP " + format % args, flush=True)
+            if self.path not in ("/snapshot.jpg", "/status", "/clock"):
+                print("HTTP " + format % args, flush=True)
 
         def do_GET(self):
             if self.path == "/":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(PAGE)))
-                self.send_header("Cache-Control", "no-store")
+                self.send_no_cache()
                 self.end_headers()
                 self.wfile.write(PAGE)
             elif self.path == "/status":
@@ -148,7 +196,7 @@ def make_handler(state: PreviewState):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
-                self.send_header("Cache-Control", "no-store")
+                self.send_no_cache()
                 self.end_headers()
                 self.wfile.write(data)
             elif self.path == "/clock":
@@ -156,13 +204,35 @@ def make_handler(state: PreviewState):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
-                self.send_header("Cache-Control", "no-store")
+                self.send_no_cache()
                 self.end_headers()
                 self.wfile.write(data)
+            elif self.path == "/snapshot.jpg":
+                with state.condition:
+                    jpeg = state.jpeg
+                    capture_ns = state.jpeg_capture_ns
+                    sequence = state.sequence
+                if jpeg is None:
+                    self.send_error(503, "No preview frame yet")
+                    return
+                send_age_ms = (time.monotonic_ns() - capture_ns) / 1e6
+                self.send_response(200)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(jpeg)))
+                self.send_header("X-Frame-Capture-Monotonic-Ns", str(capture_ns))
+                self.send_header("X-Frame-Age-Ms", f"{send_age_ms:.2f}")
+                self.send_header("X-Preview-Sequence", str(sequence))
+                self.send_no_cache()
+                self.end_headers()
+                try:
+                    self.wfile.write(jpeg)
+                    state.note_send(sequence, send_age_ms)
+                except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
+                    pass
             elif self.path == "/stream.mjpg":
                 self.send_response(200)
                 self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
-                self.send_header("Cache-Control", "no-store")
+                self.send_no_cache()
                 self.end_headers()
                 self.connection.settimeout(5)
                 last_sequence = 0
@@ -179,12 +249,17 @@ def make_handler(state: PreviewState):
                             jpeg = state.jpeg
                             capture_ns = state.jpeg_capture_ns
                             last_sequence = state.sequence
+                        send_age_ms = (time.monotonic_ns() - capture_ns) / 1e6
                         # A slow viewer skips intermediate frames; it never
                         # queues images or holds the producer's lock while writing.
                         self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\n"
                                          + f"X-Frame-Capture-Monotonic-Ns: {capture_ns}\r\n".encode()
+                                         + f"X-Frame-Age-Ms: {send_age_ms:.2f}\r\n".encode()
+                                         + f"X-Preview-Sequence: {last_sequence}\r\n".encode()
                                          + f"Content-Length: {len(jpeg)}\r\n\r\n".encode()
                                          + jpeg + b"\r\n")
+                        self.wfile.flush()
+                        state.note_send(last_sequence, send_age_ms)
                 except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
                     pass
             else:
@@ -233,13 +308,16 @@ def run_camera(args, state: PreviewState, server: ThreadingHTTPServer):
                 processed += 1
                 state.publish_analysis((analysis_frame, pose, quality, raw, stable,
                                         fps, pose_frame.inference_latency_ms,
-                                        total_ms, dropped, camera_frame.timestamp_ns), {
+                                        total_ms, dropped, camera_frame.timestamp_ns,
+                                        pose_frame.frame_id), {
                     "frames_processed": processed, "frame_id": pose_frame.frame_id,
+                    "analysis_frame_id": pose_frame.frame_id,
                     "capture_timestamp_monotonic_ns": camera_frame.timestamp_ns,
                     "vision_ready_monotonic_ns": ready_ns,
                     "host_receipt_age_at_vision_ms": round(
                         (ready_ns - camera_frame.timestamp_ns) / 1e6, 2),
-                    "fps": round(fps, 2), "pose_count": len(pose_frame.poses),
+                    "fps": round(fps, 2), "analysis_fps": round(fps, 2),
+                    "pose_count": len(pose_frame.poses),
                     "quality_valid": quality.valid, "raw_gesture": raw.label.value,
                     "stable_gesture": stable.label.value,
                     "required_joint_confidence": quality.confidence_summary,
@@ -259,34 +337,60 @@ def run_camera(args, state: PreviewState, server: ThreadingHTTPServer):
 
 def run_render(args, state: PreviewState):
     last_analysis = 0
+    preview_intervals = deque(maxlen=30)
+    previous_ready_ns = None
+    next_encode_ns = 0
+    previous_jpeg_ms = 0.0
+    preview_interval_ns = int(1e9 / getattr(args, "preview_fps", 10.0))
     try:
         while True:
             with state.condition:
-                state.condition.wait_for(
-                    lambda: state.analysis_sequence != last_analysis or state.stopped,
-                    timeout=1)
-                if state.analysis_sequence == last_analysis:
-                    if state.stopped:
+                while True:
+                    now_ns = time.monotonic_ns()
+                    fresh = state.analysis_sequence != last_analysis
+                    if fresh and now_ns >= next_encode_ns:
+                        break
+                    if state.stopped and not fresh:
                         return
-                    continue
+                    wait_s = (max(0.0, (next_encode_ns-now_ns)/1e9)
+                              if fresh else 1.0)
+                    state.condition.wait(timeout=wait_s)
                 analysis = state.analysis
                 last_analysis = state.analysis_sequence
+            next_encode_ns = time.monotonic_ns() + preview_interval_ns
             (frame, pose, quality, raw, stable, fps, pose_ms, total_ms,
-             dropped, capture_ns) = analysis
+             dropped, capture_ns) = analysis[:10]
+            frame_id = analysis[10] if len(analysis) > 10 else last_analysis
+            preview_fps = (1.0 / statistics.fmean(preview_intervals)
+                           if preview_intervals else 0.0)
             overlay = draw_panel(frame, pose, quality, raw, stable, fps,
-                                 pose_ms, total_ms, dropped,
-                                 args.display_mirror, args.display_width)
+                                 preview_fps, pose_ms, total_ms,
+                                 previous_jpeg_ms,
+                                 (time.monotonic_ns()-capture_ns)/1e6,
+                                 dropped, getattr(args, "input_rotate_180", False),
+                                 args.display_mirror,
+                                 getattr(args, "preview_width", getattr(args, "display_width", 640)))
+            encode_started_ns = time.monotonic_ns()
             ok, encoded = cv2.imencode(".jpg", overlay,
-                                       [cv2.IMWRITE_JPEG_QUALITY, 75])
+                                       [cv2.IMWRITE_JPEG_QUALITY, args.jpeg_quality])
             if not ok:
                 raise RuntimeError("JPEG encoding failed")
             ready_ns = time.monotonic_ns()
+            previous_jpeg_ms = (ready_ns-encode_started_ns)/1e6
+            if previous_ready_ns is not None:
+                preview_intervals.append((ready_ns-previous_ready_ns)/1e9)
+            previous_ready_ns = ready_ns
+            preview_fps = (1.0 / statistics.fmean(preview_intervals)
+                           if preview_intervals else 0.0)
             state.publish(encoded.tobytes(), {
-                "display_frame_id": last_analysis,
+                "display_frame_id": frame_id,
                 "capture_timestamp_monotonic_ns": capture_ns,
                 "frame_ready_monotonic_ns": ready_ns,
                 "host_receipt_age_at_publish_ms": round(
                     (ready_ns - capture_ns) / 1e6, 2),
+                "frame_age_ms": round((ready_ns-capture_ns)/1e6, 2),
+                "preview_fps": round(preview_fps, 2),
+                "jpeg_encode_ms": round(previous_jpeg_ms, 2),
             })
     except Exception as exc:
         state.fail_render(exc)
@@ -299,18 +403,25 @@ def main():
     parser.add_argument("--calibration", type=Path,
                         default=AppConfig().calibration_path)
     parser.add_argument("--model", type=Path, default=None)
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--input-rotate-180", action="store_true",
                         help="Rotate rectified analysis frame by 180 degrees before Pose inference.")
     parser.add_argument("--display-mirror", action="store_true")
-    parser.add_argument("--display-width", type=int, default=960,
+    parser.add_argument("--preview-width", "--display-width", dest="preview_width",
+                        type=int, default=640,
                         help="Final display width only; inference remains at calibrated resolution")
+    parser.add_argument("--jpeg-quality", type=int, default=55)
+    parser.add_argument("--preview-fps", type=float, default=10.0)
     parser.add_argument("--max-frames", type=int, default=0,
                         help="Optional finite camera run for diagnostics")
     args = parser.parse_args()
-    if args.display_width < 480:
-        parser.error("--display-width must be at least 480")
+    if not 480 <= args.preview_width <= 1280:
+        parser.error("--preview-width must be within 480..1280")
+    if not 30 <= args.jpeg_quality <= 90:
+        parser.error("--jpeg-quality must be within 30..90")
+    if not 1 <= args.preview_fps <= 60:
+        parser.error("--preview-fps must be within 1..60")
     state = PreviewState()
     server = ThreadingHTTPServer((args.host, args.port), make_handler(state))
     server.daemon_threads = True

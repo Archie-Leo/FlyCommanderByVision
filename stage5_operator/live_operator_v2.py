@@ -220,7 +220,8 @@ def main():
         recorder.stop(reason="ERROR" if failure else "RUN_EXIT")
         tracker.close()
         embedder.close()
-        cv2.destroyAllWindows()
+        if not args.no_display:
+            cv2.destroyAllWindows()
     elapsed = max(1e-6,time.perf_counter()-started)
     summary = {"status":"ERROR_FAIL_CLOSED" if failure else "VISUAL_ONLY_RUN_COMPLETE",
                "frames":count,"fps":count/elapsed,"elapsed_s":elapsed,"error":failure,

@@ -31,6 +31,37 @@ from stage5_v2.tracker import BotSortTrackerAdapter
 from stage6.rotated_depth import RotatedDepthAdapter
 
 
+class TrackedRotatedDepthAdapter(RotatedDepthAdapter):
+    """Stage5-only tracked ROI path; keep Stage6 adapter unchanged."""
+
+    def process_tracked(self, left_raw, right_raw, bboxes, track_ids, *,
+                        frame_id, timestamp_ms, rectified_left=None):
+        mapping_start = time.perf_counter()
+        if self._original_left is None or rectified_left is not self._analysis_left:
+            raise RuntimeError("Rotated depth frame was not prepared")
+        height, width = rectified_left.shape[:2]
+        # XYXY boxes have exclusive x2/y2 boundaries.
+        source_boxes = [(width-x2, height-y2, width-x1, height-y1)
+                        for x1, y1, x2, y2 in bboxes]
+        self.last_mapping_ms = (time.perf_counter()-mapping_start)*1000.
+        _, depths = self.source.process_tracked(
+            left_raw, right_raw, source_boxes, track_ids, frame_id=frame_id,
+            timestamp_ms=timestamp_ms, rectified_left=self._original_left)
+        return rectified_left, depths
+
+    @property
+    def last_profile_ms(self):
+        profile = dict(self.source.last_profile_ms)
+        profile["bbox_mapping"] = getattr(self, "last_mapping_ms", 0.)
+        return profile
+
+    def __getattr__(self, name):
+        if name in ("last_depth_ages_ms", "last_depth_valid", "last_depth_sources",
+                    "last_updated_count", "last_roi_shapes"):
+            return getattr(self.source, name)
+        raise AttributeError(name)
+
+
 PAGE = b"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stage5 Operator Lock</title>
@@ -62,7 +93,7 @@ async function frame(){
 frame();
 setInterval(async()=>{try{const s=await(await fetch('/status',{cache:'no-store'})).json();
 const c=(s.acquisition_checks||[])[0]||{};
-document.getElementById('status').textContent=`${s.ownership_state||'WAITING'} | UI ${s.ui_state||'-'} | Reject ${s.reject_reason||'-'} | Session ${s.operator_session_id||'-'} | Track ${s.current_track_id??'-'} | Pose ${s.pose_count??0} | People ${s.people_count??0} | T-Pose ${c.tpose_matched??'-'} | Pose valid ${c.pose_valid??'-'} | Crop ${c.crop_quality??'-'} | Stage5 ${s.latency_ms?.stage5_total?.toFixed(0)??'-'} ms`;
+document.getElementById('status').textContent=`${s.ownership_state||'WAITING'} | UI ${s.ui_state||'-'} | Reject ${s.reject_reason||'-'} | Session ${s.operator_session_id||'-'} | Track ${s.current_track_id??'-'} | Pose ${s.pose_count??0} | People ${s.people_count??0} | T-Pose ${c.tpose_matched??'-'} | Pose valid ${c.pose_valid??'-'} | Crop ${c.crop_quality??'-'} | Pose ${s.pose_latency_ms?.toFixed(0)??'-'} ms | Stage5 ${s.latency_ms?.stage5_total?.toFixed(0)??'-'} ms | Loop ${s.analysis_fps??'-'} FPS | Depth ${s.latency_ms?.stereo_depth?.toFixed(0)??'-'} ms | Person depth ${s.operator_depth?.depth_m?.toFixed(2)??'-'} m | Age ${s.operator_depth?.age_ms?.toFixed(0)??'-'} ms | Valid ${s.operator_depth?.valid??'-'} | ROI ${JSON.stringify(s.depth_roi_shapes||[])}`;
 }catch(_){document.getElementById('status').textContent='Preview disconnected';}},500)
 </script></html>"""
 
@@ -79,7 +110,12 @@ class PreviewState:
         self.stopped = False
         self.error = None
 
-    def publish_analysis(self, image, people, authorized, record, capture_ns, fps, pose_count):
+    def publish_analysis(self, image, people, authorized, record, capture_ns, fps,
+                         pose_count, pose_latency_ms):
+        observations = record.get("depth_observations", [])
+        operator_depth = next((item for item in observations
+                               if item["track_id"] == record["current_track_id"]),
+                              observations[0] if observations else None)
         with self.condition:
             self.analysis = (image, people, authorized, record, capture_ns)
             self.analysis_sequence += 1
@@ -91,6 +127,16 @@ class PreviewState:
                 current_track_id=record["current_track_id"],
                 gesture=authorized.gesture, authorized=authorized.valid,
                 analysis_fps=round(fps, 2), latency_ms=record["latency_ms"],
+                pose_latency_ms=pose_latency_ms,
+                rectify_ms=record.get("rectify_ms"),
+                depth_age_ms=record.get("depth_age_ms", []),
+                depth_observations=observations,
+                operator_depth=operator_depth,
+                depth_valid=record.get("depth_valid", []),
+                depth_source_frame_ids=record.get("depth_source_frame_ids", []),
+                depth_updated_count=record.get("depth_updated_count", 0),
+                depth_roi_shapes=record.get("depth_roi_shapes", []),
+                depth_profile_ms=record.get("depth_profile_ms", {}),
                 acquisition_checks=record.get("acquisition_checks", []),
                 best_candidate=record.get("best_candidate"),
                 capture_age_ms=round((time.monotonic_ns()-capture_ns)/1e6, 2),
@@ -205,10 +251,14 @@ def camera_worker(args, state, server):
     try:
         embedder = RKNNOSNetEmbedder(args.reid_model,
                                     expected_sha256=VALIDATED_RK3576_SHA256)
-        depth = StereoPersonDepthAdapter(args.calibration, args.stage2_root)
-        analysis_depth = RotatedDepthAdapter(depth)
+        depth = StereoPersonDepthAdapter(
+            args.calibration, args.stage2_root,
+            depth_roi_margin_ratio=args.depth_roi_margin_ratio,
+            depth_rate_hz=args.depth_rate_hz,
+            depth_max_age_ms=args.depth_max_age_ms)
+        analysis_depth = TrackedRotatedDepthAdapter(depth)
         tracker = BotSortTrackerAdapter(args.boxmot_lib)
-        pipeline = Stage5PipelineV2(tracker, embedder, analysis_depth)
+        pipeline = Stage5PipelineV2(tracker, embedder, analysis_depth, roi_depth=True)
         config = AppConfig(camera=replace(CameraConfig(), device=args.camera),
                            backend=replace(BackendConfig(), num_poses=4))
         evaluator = PoseQualityEvaluator(config.quality)
@@ -220,7 +270,9 @@ def camera_worker(args, state, server):
             while not state.stopped:
                 frame = camera.read()
                 right = frame.raw_sbs[:, config.camera.eye_width:].copy()
+                rectify_start = time.perf_counter()
                 original_left = cv2.remap(frame.left_raw, *depth.maps[0], cv2.INTER_LINEAR)
+                rectify_ms = (time.perf_counter()-rectify_start)*1000.
                 analysis_left = cv2.rotate(original_left, cv2.ROTATE_180)
                 analysis_depth.prepare(original_left, analysis_left)
                 pose_frame = backend.infer(analysis_left, frame.timestamp_ns//1_000_000,
@@ -228,10 +280,12 @@ def camera_worker(args, state, server):
                 image, people, authorized, record = pipeline.process(
                     frame.left_raw, right, pose_frame, evaluator, normalizer,
                     rectified_left=analysis_left)
+                record["rectify_ms"] = rectify_ms
                 processed += 1
                 fps = processed/max(1e-6, time.monotonic()-started)
                 state.publish_analysis(image, people, authorized, record,
-                                       frame.timestamp_ns, fps, len(pose_frame.poses))
+                                       frame.timestamp_ns, fps, len(pose_frame.poses),
+                                       pose_frame.inference_latency_ms)
                 if args.max_frames and processed >= args.max_frames:
                     break
     except Exception as exc:
@@ -267,6 +321,9 @@ def main():
     parser.add_argument("--jpeg-quality", type=int, default=55)
     parser.add_argument("--preview-fps", type=float, default=10)
     parser.add_argument("--max-frames", type=int, default=0)
+    parser.add_argument("--depth-roi-margin-ratio", type=float, default=.10)
+    parser.add_argument("--depth-rate-hz", type=float, default=5.)
+    parser.add_argument("--depth-max-age-ms", type=int, default=500)
     args = parser.parse_args()
     if not 320 <= args.preview_width <= 1280:
         parser.error("--preview-width must be within 320..1280")

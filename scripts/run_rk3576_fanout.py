@@ -91,6 +91,7 @@ class Counters:
         self.lock = threading.Lock()
         self.source_count = 0
         self.video_count = 0
+        self.video_bytes = 0
         self.compressed_count = 0
         self.compressed_stamps = OrderedDict()
         self.decoded_stamps = OrderedDict()
@@ -128,9 +129,11 @@ class Counters:
         return Gst.PadProbeReturn.OK
 
     def video_probe(self, pad, info):
-        if info.get_buffer() is not None:
+        buffer = info.get_buffer()
+        if buffer is not None:
             with self.lock:
                 self.video_count += 1
+                self.video_bytes += buffer.get_size()
         return Gst.PadProbeReturn.OK
 
     def decoder_probe(self, pad, info):
@@ -237,6 +240,12 @@ def check_bus(bus):
         print(f"GStreamer WARNING {msg.src.get_name()}: {error}; {debug}", file=sys.stderr, flush=True)
 
 
+def run_lease_clock(dry_run, stop):
+    """Keep the Stage6 300 ms lease independent of camera and AI callbacks."""
+    while not stop.wait(.05):
+        dry_run.tick()
+
+
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--camera", default="/dev/video73")
@@ -282,7 +291,7 @@ def main():
     started = time.monotonic()
     last_report_at = started
     last_cpu_at = os.times()
-    last_source_count = last_video_count = last_ai_count = 0
+    last_source_count = last_video_count = last_ai_count = last_video_bytes = 0
     state = "NO_OPERATOR"
     intent = "HOVER"
     failed = None
@@ -305,10 +314,8 @@ def main():
             evaluator = PoseQualityEvaluator(config.quality)
             normalizer = SkeletonNormalizer(config.normalization)
             dry_run = Stage6DryRun(args.stage6_jsonl)
-            def lease_clock():
-                while not lease_stop.wait(.05):
-                    dry_run.tick()
-            lease_thread = threading.Thread(target=lease_clock, daemon=True)
+            lease_thread = threading.Thread(target=run_lease_clock, args=(dry_run, lease_stop),
+                                            name="stage6-lease", daemon=True)
             lease_thread.start()
         else:
             stage5 = config = evaluator = normalizer = dry_run = depth = analysis_depth = None
@@ -345,6 +352,7 @@ def main():
                         rectified_left=analysis_left)
                     dry_run.submit(authorized, record)
                     stage6_snapshot = dry_run.snapshot()
+                    frame_age_at_output_ms = (time.monotonic_ns()-frame.timestamp_ns)/1e6
                     decision = stage6_snapshot["stage6_decision"]
                     state = record["ownership_state"]
                     intent = decision["intent"]
@@ -354,6 +362,7 @@ def main():
                             "output_mode": "DRY-RUN NO PX4 OUTPUT", "frame_id": frame_id,
                             "source_frame_id": source_id, "capture_monotonic_ns": frame.timestamp_ns,
                             "gst_pts_ns": gst_pts_ns, "frame_age_at_ai_start_ms": age_ms,
+                            "frame_age_at_ai_output_ms": frame_age_at_output_ms,
                             "pose_ms": pose_frame.inference_latency_ms,
                             "stage5_latency_ms": record["latency_ms"],
                             "stage5_state": state, "stage4_raw": record.get("gesture_raw"),
@@ -368,6 +377,7 @@ def main():
                 if now-last_report_at >= 5:
                     with counters.lock:
                         src, vid, ai = counters.source_count, counters.video_count, counters.ai_count
+                        vid_bytes = counters.video_bytes
                         drops = counters.ai_dropped
                         last_age = counters.ai_ages_ms[-1] if counters.ai_ages_ms else None
                     dt = now-last_report_at
@@ -377,11 +387,13 @@ def main():
                     report = {"event": "WINDOW", "elapsed_s": round(now-started, 2),
                         "camera_fps": round((src-last_source_count)/dt, 2),
                         "video_fps": round((vid-last_video_count)/dt, 2),
+                        "video_h264_kbps": round(8*(vid_bytes-last_video_bytes)/dt/1000, 1),
                         "ai_fps": round((ai-last_ai_count)/dt, 2),
                         "ai_frame_age_ms": round(last_age, 2) if last_age is not None else None,
                         "ai_dropped_source_frames": drops, "stage5_state": state,
                         "stage6_intent": intent, "rss_kb": memory_kb(),
                         "process_cpu_pct": round(cpu_pct, 1),
+                        "lease_thread_tid": lease_thread.native_id if lease_thread else None,
                         "q_source": pipeline.get_by_name("q_source").get_property("current-level-buffers"),
                         "q_video": pipeline.get_by_name("q_video").get_property("current-level-buffers"),
                         "q_ai": pipeline.get_by_name("q_ai").get_property("current-level-buffers"),
@@ -394,6 +406,7 @@ def main():
                     last_report_at = now
                     last_cpu_at = cpu_now
                     last_source_count, last_video_count, last_ai_count = src, vid, ai
+                    last_video_bytes = vid_bytes
         finally:
             if backend_context is not None:
                 backend_context.__exit__(None, None, None)

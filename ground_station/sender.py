@@ -10,7 +10,7 @@ from .protocol import empty_snapshot, encode_packet, finite
 
 
 class MetadataSender:
-    def __init__(self, host, port=5601, hz=20, *, dry_run=None):
+    def __init__(self, host, port=5603, hz=20, *, dry_run=None):
         if not 1 <= hz <= 30 or not 1 <= port <= 65535:
             raise ValueError("invalid metadata rate or port")
         self.address = (host, port)

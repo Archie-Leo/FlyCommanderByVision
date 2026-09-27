@@ -1,0 +1,12 @@
+{
+  "video_sdp": "ground_station/video_link.sdp",
+  "ffmpeg": "D:/K230IDE/share/qtcreator/ffmpeg/windows/bin/ffmpeg.exe",
+  "metadata_host": "0.0.0.0",
+  "metadata_port": 5603,
+  "metadata_stale_ms": 500,
+  "overlay_timeout_ms": 1000,
+  "video_stale_ms": 1000,
+  "width": 1280,
+  "height": 960,
+  "metrics_jsonl": "runs/ground_station_v1.jsonl"
+}

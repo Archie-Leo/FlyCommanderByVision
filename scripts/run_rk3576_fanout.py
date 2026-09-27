@@ -380,7 +380,7 @@ def parse_args():
     p.add_argument("--metrics-jsonl", type=Path)
     p.add_argument("--stage6-jsonl", type=Path)
     p.add_argument("--metadata-host", help="Optional read-only UDP ground-station destination")
-    p.add_argument("--metadata-port", type=int, default=5601)
+    p.add_argument("--metadata-port", type=int, default=5603)
     p.add_argument("--metadata-hz", type=float, default=20)
     return p.parse_args()
 

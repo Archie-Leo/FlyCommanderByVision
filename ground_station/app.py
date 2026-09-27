@@ -149,9 +149,10 @@ class Console(QMainWindow):
         if now-self.last_report_at >= 5:
             duration = now-self.last_report_at
             self.display_fps = (self.canvas.displayed_frames-self.last_displayed)/duration
+            decode_fps = (video_metrics["frames"]-self.last_decoded)/duration
             report = {"event":"GS_WINDOW", "elapsed_s":round(now-self.started_at,2),
-                "video_decode_fps":round(video_metrics["fps"],2),
-                "video_decode_interval_fps":round((video_metrics["frames"]-self.last_decoded)/duration,2),
+                "video_decode_fps":round(decode_fps,2),
+                "video_decode_interval_fps":round(decode_fps,2),
                 "video_display_fps":round(self.display_fps,2),
                 "ui_fps":round((self.canvas.paint_count-self.last_painted)/duration,2),
                 "metadata_hz":round((metadata_metrics["received"]-self.last_packets)/duration,2),

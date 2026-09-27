@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""One RK3576 camera: MPP JPEG -> tee -> MPP H264 RTP + Stage3-6 dry-run.
+"""One RK3576 camera: MPP JPEG -> tee -> MPP H264 RTP + Stage3-6.
 
 The only CPU pixel boundary is videoconvert/appsink on the full SBS AI branch.
-No ROS, PX4, flight gateway, or live control publisher is created here.
+Live Stage6 output requires explicit CLI acknowledgment; this process never
+publishes PX4 input topics or VehicleCommand itself.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import statistics
 import sys
 import threading
@@ -362,6 +364,7 @@ def parse_args():
     p.add_argument("--port", type=int, default=5600)
     p.add_argument("--bitrate-kbps", type=int, default=4000)
     p.add_argument("--duration", type=float, default=300)
+    p.add_argument("--run-forever", action="store_true", help="Run until SIGTERM/SIGINT")
     p.add_argument("--no-ai", action="store_true", help="Video baseline with AI appsink still bounded")
     p.add_argument("--no-video", action="store_true", help="AI baseline with video branch replaced by fakesink")
     p.add_argument("--ai-sleep-ms", type=float, default=0, help="Test-only AI slowdown")
@@ -386,8 +389,14 @@ def parse_args():
                    help="Optional local read-only PX4 state file from px4_telemetry_readonly.py")
     p.add_argument("--px4-shadow", action="store_true",
                    help="Publish Stage6 Intent to isolated shadow Gateway topic; no PX4 input")
+    p.add_argument("--px4-live", action="store_true",
+                   help="Publish guarded Stage6 Intent to the LIVE Gateway topic")
+    p.add_argument("--allow-live-output", action="store_true",
+                   help="Explicit acknowledgment required with --px4-live")
     p.add_argument("--gateway-shadow-file", type=Path,
                    default=Path("/tmp/fcv_gateway_shadow.json"))
+    p.add_argument("--gateway-live-file", type=Path,
+                   default=Path("/tmp/fcv_gateway_live.json"))
     return p.parse_args()
 
 
@@ -395,6 +404,12 @@ def main():
     args = parse_args()
     if args.async_depth and not args.async_perception:
         raise ValueError("--async-depth requires --async-perception")
+    if args.px4_live and (args.px4_shadow or not args.allow_live_output):
+        raise ValueError("--px4-live requires --allow-live-output and excludes --px4-shadow")
+    if args.allow_live_output and not args.px4_live:
+        raise ValueError("--allow-live-output requires --px4-live")
+    if args.px4_live and (args.no_ai or args.px4_telemetry_file is None or not args.metadata_host):
+        raise ValueError("PX4 live requires AI, read-only telemetry, and metadata")
     if args.px4_shadow and (args.px4_telemetry_file is None or not args.metadata_host):
         raise ValueError("PX4 shadow requires read-only telemetry and metadata")
     if args.metadata_host:
@@ -404,6 +419,12 @@ def main():
         if not 1 <= args.metadata_port <= 65535 or not 1 <= args.metadata_hz <= 30:
             raise ValueError("invalid metadata port or rate")
     description = pipeline_description(args)
+    output_mode = ("LIVE GUARDED STAGE6 INTENT" if args.px4_live else
+                   "SHADOW NO PX4 OUTPUT" if args.px4_shadow else
+                   "DRY-RUN NO PX4 OUTPUT")
+    def on_sigterm(_signum, _frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, on_sigterm)
     Gst.init(None)
     pipeline = Gst.parse_launch(description)
     camera = pipeline.get_by_name("camera")
@@ -470,19 +491,26 @@ def main():
             evaluator = PoseQualityEvaluator(config.quality)
             normalizer = SkeletonNormalizer(config.normalization)
             dry_run = Stage6DryRun(args.stage6_jsonl)
-            if args.px4_shadow:
+            if args.px4_shadow or args.px4_live:
                 import rclpy as shadow_rclpy
                 from stage6.ros_intent_node import (AuthorizedIntentPublisher,
-                    SHADOW_TOPIC, operator_id_from_session)
+                    GATEWAY_TOPIC, SHADOW_TOPIC, operator_id_from_session)
                 from drone_control_gateway.msg import Intent as CandidateIntent
                 shadow_rclpy.init()
-                shadow_node = AuthorizedIntentPublisher(topic=SHADOW_TOPIC)
-                candidate_msg_type = CandidateIntent
-                candidate_operator_id = operator_id_from_session
-                candidate_publisher = shadow_node.create_publisher(
-                    CandidateIntent, "/interaction/candidate_shadow", 10)
+                # rclpy.init installs its own SIGTERM handler, which shuts the
+                # context before the camera/ROS cleanup can publish safe HOVER.
+                signal.signal(signal.SIGTERM, on_sigterm)
+                signal.signal(signal.SIGINT, on_sigterm)
+                shadow_node = AuthorizedIntentPublisher(
+                    topic=GATEWAY_TOPIC if args.px4_live else SHADOW_TOPIC,
+                    allow_live_output=args.px4_live)
+                if args.px4_shadow:
+                    candidate_msg_type = CandidateIntent
+                    candidate_operator_id = operator_id_from_session
+                    candidate_publisher = shadow_node.create_publisher(
+                        CandidateIntent, "/interaction/candidate_shadow", 10)
                 shadow_thread = threading.Thread(target=shadow_rclpy.spin,
-                    args=(shadow_node,), name="px4-shadow-intent", daemon=True)
+                    args=(shadow_node,), name="stage6-ros-intent", daemon=True)
                 shadow_thread.start()
             if args.metadata_host:
                 try:
@@ -490,10 +518,14 @@ def main():
                     metadata_sender = MetadataSender(args.metadata_host, args.metadata_port,
                                                       args.metadata_hz, dry_run=dry_run,
                                                       px4_file=args.px4_telemetry_file,
-                                                      command_file=(args.gateway_shadow_file if args.px4_shadow else None),
+                                                      command_file=(args.gateway_live_file if args.px4_live else
+                                                                    args.gateway_shadow_file if args.px4_shadow else None),
+                                                      command_mode="LIVE" if args.px4_live else "SHADOW",
                                                       authority_snapshot=(shadow_node.authority_snapshot
                                                                           if shadow_node else None))
                 except (OSError, ValueError) as exc:
+                    if args.px4_live:
+                        raise RuntimeError("LIVE metadata failed to start") from exc
                     print(f"Metadata disabled: {exc}", file=sys.stderr, flush=True)
             lease_thread = threading.Thread(target=run_lease_clock, args=(dry_run, lease_stop),
                                             name="stage6-lease", daemon=True)
@@ -502,7 +534,7 @@ def main():
             stage5 = config = evaluator = normalizer = dry_run = depth = analysis_depth = None
         if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
             raise RuntimeError("GStreamer pipeline failed to start")
-        print("FAN-OUT DRY-RUN NO PX4 OUTPUT", flush=True)
+        print(f"FAN-OUT {output_mode}", flush=True)
         print(f"Camera {args.camera} {args.camera_fps} FPS, video {'OFF' if args.no_video else f'{args.video_fps} FPS to {args.host}:{args.port}'}, AI {'OFF' if args.no_ai else 'ON'}", flush=True)
         if args.no_ai:
             backend_context = None
@@ -542,7 +574,7 @@ def main():
                 if shadow_node is not None:
                     shadow_node.submit(authorized, record)
                     candidate = dry_run.snapshot()["stage6_decision"]
-                    if candidate is not None:
+                    if args.px4_shadow and candidate is not None:
                         message = candidate_msg_type()
                         message.stamp = shadow_node.get_clock().now().to_msg()
                         message.operator_id = candidate_operator_id(
@@ -569,7 +601,7 @@ def main():
                 intent = decision["intent"]
                 counters.add_ai(source_id, age_ms, pose_frame.inference_latency_ms, record["latency_ms"])
                 if metrics:
-                    item = {"output_mode": "DRY-RUN NO PX4 OUTPUT", "frame_id": frame_id,
+                    item = {"output_mode": output_mode, "frame_id": frame_id,
                             "source_frame_id": source_id, "capture_monotonic_ns": frame.timestamp_ns,
                             "gst_pts_ns": gst_pts_ns, "frame_age_at_ai_start_ms": age_ms,
                             "frame_age_at_ai_output_ms": frame_age_at_output_ms,
@@ -620,8 +652,10 @@ def main():
                 perception_thread = threading.Thread(target=perception_loop,
                     name="perception-worker", daemon=True)
                 perception_thread.start()
-            while time.monotonic()-started < args.duration:
+            while args.run_forever or time.monotonic()-started < args.duration:
                 check_bus(bus)
+                if shadow_thread is not None and not shadow_thread.is_alive():
+                    raise RuntimeError("Stage6 ROS Intent thread stopped")
                 if counters.probe_error:
                     raise RuntimeError(counters.probe_error)
                 if args.no_ai:
@@ -664,7 +698,7 @@ def main():
                         "q_video": pipeline.get_by_name("q_video").get_property("current-level-buffers"),
                         "q_ai": pipeline.get_by_name("q_ai").get_property("current-level-buffers"),
                         "mem_available_kb": available_kb(), "max_temp_c": temperature_c(),
-                        "output_mode": "DRY-RUN NO PX4 OUTPUT"}
+                        "output_mode": output_mode}
                     if metadata_sender is not None:
                         metadata_sender.set_rates(report["ai_fps"], report["video_fps"])
                         report["metadata"] = metadata_sender.status()
@@ -710,9 +744,11 @@ def main():
             metadata_sender.close()
         if shadow_node is not None:
             shadow_node.stop_and_publish()
-            shadow_rclpy.shutdown()
+            shadow_rclpy.get_global_executor().shutdown(timeout_sec=2)
             shadow_thread.join(timeout=2)
             shadow_node.destroy_node()
+            if shadow_rclpy.ok():
+                shadow_rclpy.shutdown()
         if dry_run is not None:
             dry_run.close()
         if args.async_depth and analysis_depth is not None:
@@ -726,7 +762,7 @@ def main():
             metrics.close()
     with counters.lock:
         summary = {"status": "ERROR" if failed else "COMPLETE", "error": failed,
-            "output_mode": "DRY-RUN NO PX4 OUTPUT", "camera_open_count": 1,
+            "output_mode": output_mode, "camera_open_count": 1,
             "mjpeg_decoder_count": 1, "camera_source_frames": counters.source_count,
             "decoded_frames": counters.decoded_count,
             "max_source_decoder_pts_delta_ms": round(counters.max_pts_delta_ms, 3),

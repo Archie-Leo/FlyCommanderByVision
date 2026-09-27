@@ -240,7 +240,7 @@ class Console(QMainWindow):
         for name in ("ARM", "TAKEOFF 1.2m", "LAND", "RETURN"):
             button = QPushButton(name)
             button.setEnabled(False)
-            button.setToolTip("Ground Station monitor mode. PX4 live control is disabled.")
+            button.setToolTip("Ground Station monitor mode. This button sends no PX4 command.")
             buttons.addWidget(button)
             self.flight_buttons[name] = button
         command_layout.addLayout(buttons)
@@ -345,7 +345,8 @@ class Console(QMainWindow):
         for name, key in (("Mode", "mode"), ("Armed", "armed"),
                           ("Failsafe", "failsafe"), ("Local Pos", "local_position_valid")):
             self.px4_card.put(name, px4[key])
-        self.px4_card.put("Control", "DRY-RUN")
+        self.px4_card.put("Control", "LIVE GUARDED" if state["command_details"] and
+                          state["command_details"].get("mode") == "LIVE" else "DRY-RUN")
         command = state["command_details"]
         if command is None:
             command_text = "NOT FORWARDED  ·  DRY-RUN MODE"
@@ -354,11 +355,16 @@ class Console(QMainWindow):
             values = ", ".join(shown(item) for item in velocity)
             projected = command.get("projected_velocity") or [None, None, None]
             projected_values = ", ".join(shown(item) for item in projected)
-            command_text = (f"SHADOW · NOT TRANSMITTED · {shown(command.get('intent'))} "
-                            f"· AUTHORITY {shown(command.get('authority'))} "
-                            f"· EFFECTIVE NED [{values}] m/s "
-                            f"· IF AUTHORIZED {shown(command.get('projected_intent'))} "
-                            f"NED [{projected_values}] m/s")
+            if command.get("mode") == "LIVE":
+                command_text = (f"LIVE · GUARDED · {shown(command.get('intent'))} "
+                                f"· AUTHORITY {shown(command.get('authority'))} "
+                                f"· NED [{values}] m/s")
+            else:
+                command_text = (f"SHADOW · NOT TRANSMITTED · {shown(command.get('intent'))} "
+                                f"· AUTHORITY {shown(command.get('authority'))} "
+                                f"· EFFECTIVE NED [{values}] m/s "
+                                f"· IF AUTHORIZED {shown(command.get('projected_intent'))} "
+                                f"NED [{projected_values}] m/s")
         set_text(self.command_value, command_text)
         set_text(self.feedback_value, (f"{px4['mode']}  ·  ARMED {px4['armed']}  ·  "
                                        f"FAILSAFE {px4['failsafe']}  ·  LOCAL POS {px4['local_position_valid']}"
@@ -429,10 +435,12 @@ class Console(QMainWindow):
             "Episode limit": shown(limiter_value(3), " m"),
             "Velocity cap": shown(limiter_value(4), " m/s"),
             "Limiter reason": shown(limiter_reason),
-            "ROS2 to PX4": "NOT TRANSMITTED" if command else "--",
+            "ROS2 to PX4": ("ROS PUBLISHED" if command.get("mode") == "LIVE" else
+                             "NOT TRANSMITTED" if command else "--"),
             "Control trace": (f"{shown(gesture.get('stable'))} → {shown(stage6.get('intent'))} "
                               f"→ {shown(command.get('authority'))} → "
-                              f"{shown(command.get('projected_intent'))} → NOT TRANSMITTED"
+                              f"{shown(command.get('projected_intent') if command.get('mode') == 'SHADOW' else command.get('intent'))} "
+                              f"→ {'ROS PUBLISHED' if command.get('mode') == 'LIVE' else 'NOT TRANSMITTED'}"
                               if command else "--"),
             "Packet bytes": "--", "Diagnostics": "NOT AVAILABLE IN V1",
         }

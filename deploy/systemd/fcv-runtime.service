@@ -1,0 +1,18 @@
+[Unit]
+Description=FCV guarded LIVE Gateway and single-camera fanout
+PartOf=fcv-stack.target
+After=network-online.target fcv-xrce.service fcv-telemetry.service
+Wants=network-online.target fcv-xrce.service fcv-telemetry.service
+
+[Service]
+Type=simple
+User=lckfb
+EnvironmentFile=/etc/fcv/fcv.env
+ExecStart=/bin/bash /home/lckfb/FlyCommanderByVision/scripts/fcv_service.sh runtime
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=20
+
+[Install]
+WantedBy=fcv-stack.target

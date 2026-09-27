@@ -113,7 +113,7 @@ def competition_state(packet, receive_age_ms, *, video_ready=True,
         control_safety = "INHIBITED"
 
     command = (packet.get("command") or {})
-    command_current = command.get("mode") == "SHADOW" and command.get("fresh") is True
+    command_current = command.get("mode") in {"SHADOW", "LIVE"} and command.get("fresh") is True
     if command_current and command.get("authority") == "BLOCKED" and valid and intent != "HOVER":
         authority_reason = _label(command.get("authority_reason"), "FLIGHT_AUTHORITY_BLOCKED")
         safety = ("COMMAND BLOCKED", authority_reason.replace("_", " "), "warning")

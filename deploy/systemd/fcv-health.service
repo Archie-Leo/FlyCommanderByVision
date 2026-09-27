@@ -1,0 +1,16 @@
+[Unit]
+Description=FCV live stack read-only health report
+PartOf=fcv-stack.target
+After=fcv-runtime.service
+Wants=fcv-runtime.service
+
+[Service]
+Type=simple
+User=lckfb
+EnvironmentFile=/etc/fcv/fcv.env
+ExecStart=/bin/bash /home/lckfb/FlyCommanderByVision/scripts/fcv_service.sh health
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=fcv-stack.target

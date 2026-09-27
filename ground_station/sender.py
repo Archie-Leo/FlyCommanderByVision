@@ -25,13 +25,16 @@ def encode_with_optional_limiter(packet):
 
 class MetadataSender:
     def __init__(self, host, port=5603, hz=20, *, dry_run=None, px4_file=None,
-                 command_file=None, authority_snapshot=None):
+                 command_file=None, authority_snapshot=None, command_mode="SHADOW"):
         if not 1 <= hz <= 30 or not 1 <= port <= 65535:
             raise ValueError("invalid metadata rate or port")
+        if command_mode not in {"SHADOW", "LIVE"}:
+            raise ValueError("invalid command mode")
         self.address = (host, port)
         self.dry_run = dry_run
         self.px4_file = px4_file
         self.command_file = command_file
+        self.command_mode = command_mode
         self.authority_snapshot = authority_snapshot
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.setblocking(False)
@@ -80,18 +83,21 @@ class MetadataSender:
                 try:
                     command = json.loads(self.command_file.read_text(encoding="utf-8"))
                     age_ns = time.monotonic_ns() - command["monotonic_ns"]
-                    if not 0 <= age_ns <= 500_000_000 or command.get("mode") != "SHADOW":
-                        raise ValueError("stale gateway shadow")
+                    if not 0 <= age_ns <= 500_000_000 or command.get("mode") != self.command_mode:
+                        raise ValueError("stale gateway snapshot")
                     packet["command"] = {
-                        "mode": "SHADOW", "fresh": True, "transmitted": False,
+                        "mode": command["mode"], "fresh": True,
+                        "transmitted": command.get("mode") == "LIVE" and command.get("ros_published") is True,
                         "intent": command.get("intent"),
                         "frame": command.get("frame"),
                         "velocity": command.get("velocity"),
                         "yawspeed": command.get("yawspeed"),
-                        "projected_intent": command.get("projected_intent"),
-                        "projected_velocity": command.get("projected_velocity"),
-                        "projected_yawspeed": command.get("projected_yawspeed"),
                         }
+                    if command["mode"] == "SHADOW":
+                        packet["command"].update(
+                            projected_intent=command.get("projected_intent"),
+                            projected_velocity=command.get("projected_velocity"),
+                            projected_yawspeed=command.get("projected_yawspeed"))
                     state_code = {"IDLE": "I", "ACTIVE": "A",
                                   "LIMIT_REACHED": "L",
                                   "BLOCKED_INVALID_POSITION": "P"}.get(
@@ -105,7 +111,8 @@ class MetadataSender:
                             command.get("episode_limit_m"),
                             command.get("velocity_cap_mps")]
                 except (OSError, ValueError, TypeError, KeyError):
-                    packet["command"] = {"mode": "SHADOW", "transmitted": False,
+                    packet["command"] = {"mode": self.command_mode,
+                                         "transmitted": False,
                                          "fresh": False}
                 if self.authority_snapshot is not None:
                     authority = self.authority_snapshot()

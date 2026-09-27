@@ -18,6 +18,7 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 using namespace std::chrono_literals;
@@ -40,6 +41,7 @@ public:
     shadow_mode_ = declare_parameter<bool>("shadow_mode", false);
     shadow_snapshot_path_ = declare_parameter<std::string>("shadow_snapshot_path", "");
     shadow_trace_path_ = declare_parameter<std::string>("shadow_trace_path", "");
+    live_snapshot_path_ = declare_parameter<std::string>("live_snapshot_path", "");
     if (shadow_mode_) {
       if (shadow_snapshot_path_.empty() || shadow_trace_path_.empty()) {
         throw std::invalid_argument("shadow mode requires snapshot and trace paths");
@@ -216,6 +218,7 @@ private:
     uint64_t projected_seq = 0;
     std::string candidate_intent;
     bool timed_out = false;
+    bool gateway_authority = false;
     LimiterSnapshot limiter_snapshot;
     LimiterSnapshot projected_snapshot;
     {
@@ -243,6 +246,7 @@ private:
         now >= status_received_at_ && now - status_received_at_ <= 1500ms;
       const bool flight_authority = status_fresh && status_armed_ && status_offboard_ &&
         !status_failsafe_;
+      gateway_authority = flight_authority;
       const bool intent_current = last_intent_msg_ && !timed_out &&
         now - last_intent_received_at_ <= 500ms;
       if (intent_current && !command.accepted) {
@@ -347,6 +351,41 @@ private:
     }
     offboard_mode_pub_->publish(mode);
     trajectory_pub_->publish(setpoint);
+    if (!live_snapshot_path_.empty()) {
+      std::ostringstream json;
+      json << "{\"mode\":\"LIVE\",\"transmitted\":true,\"ros_published\":true,"
+           << "\"frame\":\"LOCAL_NED\",\"monotonic_ns\":"
+           << std::chrono::duration_cast<std::chrono::nanoseconds>(
+                CommandLease::Clock::now().time_since_epoch()).count()
+           << ",\"intent\":\"" << command.canonical_intent << "\""
+           << ",\"authority\":\"" << (gateway_authority ? "GRANTED" : "BLOCKED") << "\""
+           << ",\"velocity\":[" << setpoint.velocity[0] << ','
+           << setpoint.velocity[1] << ',' << setpoint.velocity[2] << ']'
+           << ",\"yawspeed\":" << setpoint.yawspeed
+           << ",\"safety_limiter_state\":\"" << episode_state_name(limiter_snapshot.state) << "\""
+           << ",\"episode_id\":" << limiter_snapshot.episode_id
+           << ",\"episode_intent\":\"" << limiter_snapshot.episode_intent << "\""
+           << ",\"episode_distance_m\":" << limiter_snapshot.distance_m
+           << ",\"episode_limit_m\":" << limiter_snapshot.limit_m
+           << ",\"velocity_cap_mps\":" << limiter_snapshot.velocity_cap_mps
+           << ",\"limit_reached\":" <<
+              (limiter_snapshot.state == EpisodeState::LIMIT_REACHED ? "true" : "false")
+           << ",\"limiter_reason\":\"" << limiter_snapshot.reason << "\"}";
+      const auto temporary = live_snapshot_path_ + ".tmp";
+      {
+        std::ofstream snapshot(temporary, std::ios::trunc);
+        if (!snapshot) {
+          throw std::runtime_error("cannot open live Gateway snapshot");
+        }
+        snapshot << json.str();
+        if (!snapshot) {
+          throw std::runtime_error("cannot write live Gateway snapshot");
+        }
+      }
+      if (std::rename(temporary.c_str(), live_snapshot_path_.c_str()) != 0) {
+        throw std::runtime_error("cannot replace live Gateway snapshot");
+      }
+    }
   }
 
   IntentMapper mapper_;
@@ -357,6 +396,7 @@ private:
   bool shadow_mode_{false};
   std::string shadow_snapshot_path_;
   std::string shadow_trace_path_;
+  std::string live_snapshot_path_;
   std::ofstream shadow_trace_;
   uint64_t last_intent_seq_{0};
   bool last_intent_valid_{false};

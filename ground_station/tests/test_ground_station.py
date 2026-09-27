@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import socket
+import tempfile
 import time
 import unittest
 from types import SimpleNamespace
@@ -26,6 +28,42 @@ class Map:
 
 
 class GroundStationTests(unittest.TestCase):
+    def test_live_command_metadata_reports_blocked_zero_output(self):
+        receiver = MetadataReceiver("127.0.0.1", 0)
+        with tempfile.TemporaryDirectory() as folder:
+            snapshot = Path(folder) / "gateway_live.json"
+            snapshot.write_text(json.dumps({
+                "mode": "LIVE", "ros_published": True,
+                "monotonic_ns": time.monotonic_ns(),
+                "intent": "HOVER", "frame": "LOCAL_NED",
+                "velocity": [0, 0, 0], "yawspeed": 0.0,
+                "safety_limiter_state": "IDLE", "episode_id": 0,
+                "episode_distance_m": 0, "episode_limit_m": 0.5,
+                "velocity_cap_mps": 0.3,
+            }), encoding="utf-8")
+            sender = MetadataSender("127.0.0.1", receiver.socket.getsockname()[1],
+                                    20, command_file=snapshot, command_mode="LIVE",
+                                    authority_snapshot=lambda: {
+                                        "flight_authority_enabled": False,
+                                        "authority_transition_reason": "BLOCKED_DISARMED"})
+            try:
+                deadline = time.monotonic() + 0.4
+                command = None
+                while time.monotonic() < deadline:
+                    packet = receiver.snapshot()[0]
+                    command = (packet or {}).get("command")
+                    if command and command.get("fresh"):
+                        break
+                    time.sleep(0.01)
+                self.assertIsNotNone(command)
+                self.assertTrue(command["fresh"])
+                self.assertTrue(command["transmitted"])
+                self.assertEqual(command["authority"], "BLOCKED")
+                self.assertEqual(command["velocity"], [0, 0, 0])
+            finally:
+                sender.close()
+                receiver.close()
+
     def test_optional_limiter_never_drops_existing_metadata_packet(self):
         packet = empty_snapshot()
         packet["command"] = {"mode": "SHADOW", "pad": "x" * 600}

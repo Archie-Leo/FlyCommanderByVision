@@ -13,6 +13,7 @@ from pathlib import Path
 import time
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from px4_msgs.msg import FailsafeFlags, VehicleCommandAck, VehicleLocalPosition, VehicleStatus
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -89,9 +90,12 @@ def main():
     node = Px4TelemetryReader(args.output)
     try:
         rclpy.spin(node)
+    except ExternalShutdownException:
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

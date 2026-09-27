@@ -1,0 +1,17 @@
+[Unit]
+Description=FCV read-only PX4 telemetry
+PartOf=fcv-stack.target
+After=fcv-xrce.service
+Wants=fcv-xrce.service
+
+[Service]
+Type=simple
+User=lckfb
+EnvironmentFile=/etc/fcv/fcv.env
+ExecStart=/bin/bash /home/lckfb/FlyCommanderByVision/scripts/fcv_service.sh telemetry
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=fcv-stack.target

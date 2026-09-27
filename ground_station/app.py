@@ -1,4 +1,4 @@
-"""Windows competition console. Read-only video and metadata; no PX4 publisher."""
+"""Windows competition console with a separate guarded command bridge client."""
 from __future__ import annotations
 
 import argparse
@@ -9,10 +9,11 @@ import time
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import (QApplication, QDialog, QFormLayout, QFrame,
-    QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
+    QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QScrollArea,
     QVBoxLayout, QWidget)
 
 from .config import load_config
+from .command_client import CommandClient
 from .evidence import competition_state
 from .metadata_receiver import MetadataReceiver
 from .overlay import VideoCanvas
@@ -162,13 +163,17 @@ class EngineeringDialog(QDialog):
 
 
 class Console(QMainWindow):
-    def __init__(self, config, *, video=None, metadata=None):
+    def __init__(self, config, *, video=None, metadata=None, command_client=None):
         super().__init__()
         self.config = config
         self.video = video if video is not None else VideoReceiver(
             config["ffmpeg"], config["video_sdp"], config["width"], config["height"])
         self.metadata = metadata if metadata is not None else MetadataReceiver(
             config["metadata_host"], config["metadata_port"])
+        self.command_client = command_client
+        if self.command_client is None and config["command_key"].is_file():
+            self.command_client = CommandClient(config["command_host"],
+                config["command_port"], config["command_key"].read_bytes().strip())
         self.started_at = self.last_report_at = self.last_ui_at = time.monotonic()
         self.last_displayed = self.last_painted = self.last_packets = self.last_decoded = 0
         self.display_fps = self.decode_fps = self.metadata_hz = 0.0
@@ -194,7 +199,7 @@ class Console(QMainWindow):
         header.addStretch(1)
         header.addWidget(label("COMPETITION MODE", "modeBadge"))
         header.addSpacing(12)
-        header.addWidget(label("MONITOR ONLY", "monitorBadge"))
+        header.addWidget(label("MANUAL COMMAND BRIDGE", "monitorBadge"))
         outer.addLayout(header)
 
         chain = QHBoxLayout()
@@ -232,8 +237,10 @@ class Console(QMainWindow):
         command_layout.setContentsMargins(14, 8, 14, 8)
         command_layout.setSpacing(3)
         command_layout.addWidget(label("COMMAND TO PX4", "flowTitle"))
-        self.command_value = label("NOT FORWARDED  ·  DRY-RUN MODE", "flowValue", wrap=True)
+        self.command_value = label("VISION COMMAND · WAITING", "flowValue", wrap=True)
         command_layout.addWidget(self.command_value)
+        self.transaction_value = label("BRIDGE DISCONNECTED · TRANSACTION IDLE", "flowValue", wrap=True)
+        command_layout.addWidget(self.transaction_value)
         buttons = QHBoxLayout()
         buttons.setSpacing(5)
         self.flight_buttons = {}
@@ -243,6 +250,8 @@ class Console(QMainWindow):
             button.setToolTip("Ground Station monitor mode. This button sends no PX4 command.")
             buttons.addWidget(button)
             self.flight_buttons[name] = button
+        self.flight_buttons["TAKEOFF 1.2m"].clicked.connect(lambda: self._request_flight("TAKEOFF"))
+        self.flight_buttons["LAND"].clicked.connect(lambda: self._request_flight("LAND"))
         command_layout.addLayout(buttons)
         flow.addWidget(command, 1)
         feedback = QFrame()
@@ -310,6 +319,75 @@ class Console(QMainWindow):
             self.last_ui_at = 0
             self.refresh()
 
+    def _request_flight(self, command):
+        if self.command_client is None:
+            return
+        message = ("确认自动解锁并起飞至 1.2 m？\n\n请确认：\n- 飞行区域安全\n- 螺旋桨已正确安装\n"
+                   "- 人员远离无人机\n- 遥控器可随时接管" if command == "TAKEOFF" else
+                   "确认自动着陆？\n视觉控制将失去飞行权限，PX4 将进入自动着陆流程。")
+        if QMessageBox.question(self, "确认高风险飞行命令", message,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.command_client.request(command)
+        except RuntimeError as exc:
+            set_text(self.transaction_value, f"REQUEST FAILED · {exc}")
+
+    def _refresh_flight_buttons(self, px4):
+        feedback = self.command_client.snapshot() if self.command_client else None
+        bridge_ready = bool(feedback and feedback.get("bridge_state") == "READY" and
+                            feedback.get("enabled") is True)
+        busy = bool(feedback and feedback.get("transaction_state") not in
+                    ("IDLE", "COMPLETE", "FAILED", "ABORTED"))
+        takeoff_ready = (bridge_ready and not busy and px4["connected"] and
+                         px4["armed"] == "False" and px4["failsafe"] == "False" and
+                         px4.get("preflight") is True and px4.get("landed") is True and
+                         px4["local_position_valid"] == "VALID" and
+                         feedback.get("takeoff_height_verified") is True)
+        land_ready = (bridge_ready and not busy and px4["connected"] and
+                      px4["armed"] == "True" and px4["failsafe"] == "False" and
+                      px4.get("landed") is False)
+        self.flight_buttons["TAKEOFF 1.2m"].setEnabled(bool(takeoff_ready))
+        self.flight_buttons["LAND"].setEnabled(bool(land_ready))
+        if not feedback:
+            block = "BRIDGE DISCONNECTED"
+        elif not feedback.get("enabled"):
+            block = "BRIDGE DISABLED PENDING REAL-FLIGHT APPROVAL"
+        elif busy:
+            block = "COMMAND BUSY"
+        elif not px4["connected"]:
+            block = "PX4 DISCONNECTED"
+        elif px4["failsafe"] == "True":
+            block = "FAILSAFE ACTIVE"
+        elif px4.get("preflight") is not True:
+            block = "PRECHECK FAILED"
+        elif px4["local_position_valid"] != "VALID":
+            block = "LOCAL POSITION INVALID"
+        elif not feedback.get("takeoff_height_verified"):
+            block = "TAKEOFF HEIGHT UNVERIFIED"
+        elif px4["armed"] == "True":
+            block = "ALREADY ARMED"
+        elif px4.get("landed") is not True:
+            block = "LAND STATE INVALID"
+        else:
+            block = "READY"
+        self.flight_buttons["TAKEOFF 1.2m"].setToolTip(
+            "Confirm native PX4 takeoff to 1.2 m" if takeoff_ready else block)
+        self.flight_buttons["LAND"].setToolTip(
+            "Confirm native PX4 landing" if land_ready else
+            "COMMAND BUSY" if busy else "PX4 NOT AIRBORNE OR BRIDGE DISABLED")
+        if feedback:
+            state = feedback.get("transaction_state", "IDLE")
+            detail = feedback.get("reason") or feedback.get("last_error") or (
+                block if state == "IDLE" else "")
+            height = feedback.get("current_height")
+            if height is not None:
+                detail += f" · HEIGHT {height:.2f} / 1.20 m"
+            set_text(self.transaction_value, f"BRIDGE CONNECTED · TRANSACTION {state} · {detail}")
+        else:
+            set_text(self.transaction_value, "BRIDGE DISCONNECTED · TRANSACTION IDLE")
+
     def refresh(self):
         frame, sequence, video_age, video_metrics = self.video.snapshot()
         packet, metadata_age, metadata_metrics = self.metadata.snapshot()
@@ -341,6 +419,7 @@ class Console(QMainWindow):
                           ("Lease", "lease"), ("Safety", "control_safety")):
             self.control_card.put(name, state[key])
         px4 = state["px4_details"]
+        self._refresh_flight_buttons(px4)
         self.px4_card.set_status(*px4["node"])
         for name, key in (("Mode", "mode"), ("Armed", "armed"),
                           ("Failsafe", "failsafe"), ("Local Pos", "local_position_valid")):
@@ -476,6 +555,8 @@ class Console(QMainWindow):
     def closeEvent(self, event):
         self.timer.stop()
         self.engineering.hide()
+        if self.command_client:
+            self.command_client.close()
         self.metadata.close()
         self.video.close()
         self.metrics_file.close()

@@ -14,6 +14,7 @@ PX4_STATUS_TIMEOUT_MS = 1500  # FlightAuthorityGate default.
 def disconnected(age_ms=None):
     return {"connected": False, "status_age_ms": age_ms, "mode": None,
             "nav_state": None, "armed": None, "failsafe": None,
+            "preflight": None, "landed": None,
             "local_position_valid": None, "position": None, "velocity": None,
             "heading": None, "last_vehicle_command_ack": None}
 
@@ -34,11 +35,17 @@ def read_px4_snapshot(path: Path, *, now_ns=None):
         pos_valid = bool(position.get("xy_valid") and position.get("z_valid")) if position_fresh else None
         vel_valid = bool(position.get("v_xy_valid") and position.get("v_z_valid")) if position_fresh else False
         ack = data.get("last_vehicle_command_ack") or {}
+        land = data.get("land") or {}
+        land_received = land.get("received_monotonic_ns")
+        land_fresh = isinstance(land_received, int) and (
+            0 <= now_ns - land_received <= PX4_STATUS_TIMEOUT_MS * 1_000_000)
         ack_received = ack.get("received_monotonic_ns")
         ack_fresh = isinstance(ack_received, int) and 0 <= now_ns - ack_received <= 10_000_000_000
         return {"connected": True, "status_age_ms": round(age_ms, 1),
                 "mode": status.get("mode"), "nav_state": status.get("nav_state"),
                 "armed": status.get("armed"), "failsafe": status.get("failsafe"),
+                "preflight": status.get("pre_flight_checks_pass"),
+                "landed": land.get("landed") if land_fresh else None,
                 "local_position_valid": pos_valid,
                 "position": ({axis: finite(position.get(axis), 2) for axis in ("x", "y", "z")}
                              if pos_valid else None),

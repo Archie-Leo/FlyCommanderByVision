@@ -193,7 +193,7 @@ def recent_window():
 def health():
     checks = {}
     units = ["fcv-stack.target", "fcv-xrce.service", "fcv-telemetry.service",
-             "fcv-runtime.service", "fcv-health.service"]
+             "fcv-command.service", "fcv-runtime.service", "fcv-health.service"]
     unit_state = {name: run("systemctl", "is-active", name).stdout.strip() for name in units}
     checks["BOOT"] = all(value == "active" for value in unit_state.values())
     print("[BOOT]", unit_state)
@@ -259,7 +259,9 @@ def health():
                          not any(info.node_name == "control_gateway" for info in shadow_subs))
         checks["PX4 OUTPUT"] = (len(mode_pubs) == len(trajectory_pubs) == 1 and
                                 mode_pubs[0].node_name == trajectory_pubs[0].node_name == "control_gateway" and
-                                len(vehicle_commands) == 0 and len(proc["gateway"]) == 1)
+                                len(vehicle_commands) == 1 and
+                                vehicle_commands[0].node_name == "fcv_ground_command_bridge" and
+                                len(proc["gateway"]) == 1)
         print("[ROS] intent publishers", len(intent_pubs), "gateway subscribers", len(intent_subs),
               "live topic", checks["ROS"])
         print("[PX4 OUTPUT] mode", len(mode_pubs), "trajectory", len(trajectory_pubs),
@@ -279,6 +281,19 @@ def health():
             node.destroy_node()
         if rclpy is not None:
             rclpy.shutdown()
+
+    bridge = None
+    try:
+        bridge = json.loads(Path("/tmp/fcv_ground_command.json").read_text())
+        checks["COMMAND BRIDGE"] = (unit_state["fcv-command.service"] == "active" and
+            bridge.get("service") == "READY" and
+            0 <= time.time() - bridge["updated_at"] <= 2.0)
+        print("[COMMAND BRIDGE]", bridge.get("transaction"),
+              "commands sent since boot", bridge.get("command_count"),
+              "enabled", bridge.get("enabled"))
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        checks["COMMAND BRIDGE"] = False
+        print("[COMMAND BRIDGE]", exc)
 
     snapshot = None
     try:
@@ -325,6 +340,9 @@ def health():
         "video": "SENDING" if checks.get("VIDEO") else "NOT_VERIFIED",
         "metadata": "SENDING" if checks.get("METADATA") else "NOT_VERIFIED",
         "gateway": "LIVE" if checks.get("GATEWAY") else "UNAVAILABLE",
+        "command_bridge": "READY" if checks.get("COMMAND BRIDGE") else "UNAVAILABLE",
+        "command_transaction": (bridge or {}).get("transaction"),
+        "commands_sent_since_boot": (bridge or {}).get("command_count"),
         "flight_authority": flight_authority,
         "checks": checks,
         "checked_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

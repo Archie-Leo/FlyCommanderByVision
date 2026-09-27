@@ -29,6 +29,7 @@ def _px4_state(packet, receive_age_ms):
                                      "INVALID" if valid is False else "--"),
             "position": px4.get("position"), "velocity": px4.get("velocity"),
             "status_age_ms": age + receive_age_ms, "nav_state": px4.get("nav_state"),
+            "preflight": px4.get("preflight"), "landed": px4.get("landed"),
             "ack": px4.get("last_vehicle_command_ack")}
 
 

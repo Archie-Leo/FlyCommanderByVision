@@ -14,7 +14,8 @@ import time
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
-from px4_msgs.msg import FailsafeFlags, VehicleCommandAck, VehicleLocalPosition, VehicleStatus
+from px4_msgs.msg import (FailsafeFlags, VehicleCommandAck, VehicleLandDetected,
+                          VehicleLocalPosition, VehicleStatus)
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
@@ -36,7 +37,7 @@ class Px4TelemetryReader(Node):
     def __init__(self, path: Path):
         super().__init__("fcv_px4_telemetry_readonly")
         self.path = path
-        self.status = self.position = self.failsafe_flags = self.ack = None
+        self.status = self.position = self.failsafe_flags = self.ack = self.land = None
         qos = QoSProfile(depth=5, reliability=ReliabilityPolicy.BEST_EFFORT,
                          durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(VehicleStatus, "/fmu/out/vehicle_status_v4", self.on_status, qos)
@@ -45,6 +46,8 @@ class Px4TelemetryReader(Node):
         self.create_subscription(FailsafeFlags, "/fmu/out/failsafe_flags", self.on_failsafe, qos)
         self.create_subscription(VehicleCommandAck, "/fmu/out/vehicle_command_ack_v1",
                                  self.on_ack, qos)
+        self.create_subscription(VehicleLandDetected, "/fmu/out/vehicle_land_detected",
+                                 self.on_land, qos)
         self.create_timer(0.1, self.write_snapshot)
 
     def on_status(self, msg):
@@ -52,6 +55,7 @@ class Px4TelemetryReader(Node):
                        "nav_state": int(msg.nav_state), "mode": nav_name(int(msg.nav_state)),
                        "armed": int(msg.arming_state) == int(msg.ARMING_STATE_ARMED),
                        "arming_state": int(msg.arming_state), "failsafe": bool(msg.failsafe),
+                       "pre_flight_checks_pass": bool(msg.pre_flight_checks_pass),
                        "accepts_offboard_setpoints": bool(msg.accepts_offboard_setpoints),
                        "px4_timestamp_us": int(msg.timestamp)}
 
@@ -73,9 +77,15 @@ class Px4TelemetryReader(Node):
                     "command": int(msg.command), "result": int(msg.result),
                     "px4_timestamp_us": int(msg.timestamp)}
 
+    def on_land(self, msg):
+        self.land = {"received_monotonic_ns": time.monotonic_ns(),
+                     "landed": bool(msg.landed),
+                     "px4_timestamp_us": int(msg.timestamp)}
+
     def write_snapshot(self):
         payload = {"status": self.status, "position": self.position,
-                   "failsafe_flags": self.failsafe_flags, "last_vehicle_command_ack": self.ack}
+                   "failsafe_flags": self.failsafe_flags, "last_vehicle_command_ack": self.ack,
+                   "land": self.land}
         temporary = self.path.with_name(self.path.name + f".{os.getpid()}.tmp")
         temporary.write_text(json.dumps(payload, separators=(",", ":"), allow_nan=False),
                              encoding="utf-8")

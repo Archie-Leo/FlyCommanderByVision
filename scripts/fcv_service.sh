@@ -26,6 +26,14 @@ case "${1:-}" in
     wait_for 'PX4 DDS' /usr/bin/python3 "$helper" wait-px4 --timeout 5
     exec /usr/bin/python3 "$REPO/scripts/px4_telemetry_readonly.py" --output "$PX4_TELEMETRY_FILE"
     ;;
+  command)
+    test -s "${GROUND_COMMAND_KEY:?}"
+    args=(--port "${GROUND_COMMAND_PORT:-5604}" --allowed-ip "$GROUND_HOST"
+          --key-file "$GROUND_COMMAND_KEY")
+    [[ "${GROUND_COMMAND_ENABLED:-0}" == 1 ]] && args+=(--enable-live-commands)
+    [[ "${GROUND_TAKEOFF_HEIGHT_VERIFIED:-0}" == 1 ]] && args+=(--verified-native-takeoff-height)
+    exec /usr/bin/python3 "$REPO/scripts/ground_command_bridge.py" "${args[@]}"
+    ;;
   runtime)
     wait_for 'Ground Station route' /usr/bin/python3 "$helper" route
     wait_for 'PX4 DDS' /usr/bin/python3 "$helper" wait-px4 --timeout 5
@@ -78,5 +86,5 @@ case "${1:-}" in
       sleep 10
     done
     ;;
-  *) echo 'usage: fcv_service.sh {xrce|telemetry|runtime|health}' >&2; exit 2 ;;
+  *) echo 'usage: fcv_service.sh {xrce|telemetry|command|runtime|health}' >&2; exit 2 ;;
 esac

@@ -1,0 +1,17 @@
+[Unit]
+Description=FCV guarded Ground Station command bridge
+PartOf=fcv-stack.target
+After=network-online.target fcv-xrce.service
+Wants=fcv-xrce.service
+
+[Service]
+Type=simple
+User=lckfb
+EnvironmentFile=/etc/fcv/fcv.env
+ExecStart=/bin/bash /home/lckfb/FlyCommanderByVision/scripts/fcv_service.sh command
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=fcv-stack.target

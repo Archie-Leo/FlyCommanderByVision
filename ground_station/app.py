@@ -32,6 +32,7 @@ class Console(QMainWindow):
         self.started_at = time.monotonic()
         self.last_report_at = self.started_at
         self.last_displayed = self.last_painted = self.last_packets = self.last_decoded = 0
+        self.display_fps = 0.0
         config["metrics_jsonl"].parent.mkdir(parents=True, exist_ok=True)
         self.metrics_file = config["metrics_jsonl"].open("w", encoding="utf-8")
         self.setWindowTitle("灵眸控飞  |  Vision Flight Console")
@@ -136,8 +137,7 @@ class Console(QMainWindow):
         self._set("Intent", state["intent"])
         self._set("Reason", state["safety_reason"])
         self._set("Lease", stage6.get("lease") if state["metadata_ready"] else "STALE")
-        elapsed = max(.001, time.monotonic()-self.started_at)
-        self._set("Video FPS", f"{self.canvas.displayed_frames/elapsed:.1f}")
+        self._set("Video FPS", f"{self.display_fps:.1f}" if video_ready else "—")
         system = (packet or {}).get("system") or {}
         self._set("AI FPS", text(system.get("ai_fps")) if state["metadata_ready"] else "—")
         self._set("Metadata Hz", f"{metadata_metrics['hz']:.1f}")
@@ -148,10 +148,11 @@ class Console(QMainWindow):
         now = time.monotonic()
         if now-self.last_report_at >= 5:
             duration = now-self.last_report_at
+            self.display_fps = (self.canvas.displayed_frames-self.last_displayed)/duration
             report = {"event":"GS_WINDOW", "elapsed_s":round(now-self.started_at,2),
                 "video_decode_fps":round(video_metrics["fps"],2),
                 "video_decode_interval_fps":round((video_metrics["frames"]-self.last_decoded)/duration,2),
-                "video_display_fps":round((self.canvas.displayed_frames-self.last_displayed)/duration,2),
+                "video_display_fps":round(self.display_fps,2),
                 "ui_fps":round((self.canvas.paint_count-self.last_painted)/duration,2),
                 "metadata_hz":round((metadata_metrics["received"]-self.last_packets)/duration,2),
                 "metadata_age_ms":round(metadata_age,1) if metadata_age is not None else None,

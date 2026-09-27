@@ -36,6 +36,22 @@ TEST(IntentMapper, WorldNedDirectionsAreExplicit)
   EXPECT_GT(mapper.map("YAW_RIGHT", true, 0.0F).yaw_rate_ned_rad_s, 0.0F);
 }
 
+TEST(IntentMapper, ShadowProjectionUsesProductionWorldNedMapping)
+{
+  IntentMapper mapper(MapperConfig{});
+  const auto right = mapper.map("MOVE_RIGHT", true, 0.0F);
+  const auto left = mapper.map("MOVE_LEFT", true, 0.0F);
+  const auto ascend = mapper.map("ASCEND", true, 0.0F);
+  const auto descend = mapper.map("DESCEND", true, 0.0F);
+  EXPECT_FLOAT_EQ(right.velocity.east_mps, 0.8F);
+  EXPECT_FLOAT_EQ(left.velocity.east_mps, -0.8F);
+  EXPECT_FLOAT_EQ(ascend.velocity.down_mps, -0.5F);
+  EXPECT_FLOAT_EQ(descend.velocity.down_mps, 0.5F);
+  EXPECT_FLOAT_EQ(right.yaw_rate_ned_rad_s, 0.0F);
+  EXPECT_FLOAT_EQ(left.yaw_rate_ned_rad_s, 0.0F);
+  // Current mapping is world NED; it contains no operator-relative orbit/yaw.
+}
+
 TEST(IntentMapper, RequestedSpeedIsClamped)
 {
   MapperConfig config;

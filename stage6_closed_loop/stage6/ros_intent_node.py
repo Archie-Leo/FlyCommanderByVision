@@ -18,6 +18,7 @@ from .intent_adapter import AuthorizedGestureIntentAdapter
 
 DRY_RUN_TOPIC = "/interaction/intent_dry_run"
 GATEWAY_TOPIC = "/interaction/intent"
+SHADOW_TOPIC = "/interaction/intent_shadow"
 
 
 def operator_id_from_session(session_id: str | None):
@@ -34,7 +35,7 @@ class AuthorizedIntentPublisher(Node):
                  px4_status_timeout_ms=1500):
         if topic == GATEWAY_TOPIC and not allow_live_output:
             raise ValueError("Gateway topic requires explicit allow_live_output")
-        if topic not in {DRY_RUN_TOPIC, GATEWAY_TOPIC}:
+        if topic not in {DRY_RUN_TOPIC, GATEWAY_TOPIC, SHADOW_TOPIC}:
             raise ValueError("unsupported Intent topic")
         super().__init__("stage6_authorized_intent_adapter")
         self.adapter = AuthorizedGestureIntentAdapter(timeout_ms)
@@ -43,14 +44,14 @@ class AuthorizedIntentPublisher(Node):
         self.flight_gate = (FlightAuthorityGate(
             offboard_nav_state=VehicleStatus.NAVIGATION_STATE_OFFBOARD,
             status_timeout_ms=px4_status_timeout_ms)
-            if topic == GATEWAY_TOPIC else None)
+            if topic in {GATEWAY_TOPIC, SHADOW_TOPIC} else None)
         self._lock = threading.Lock()
         self.publisher = self.create_publisher(
             Intent,topic,QoSProfile(depth=10,reliability=ReliabilityPolicy.RELIABLE))
         self.status_subscription = None
         if self.flight_gate is not None:
             self.status_subscription = self.create_subscription(
-                VehicleStatus,"/fmu/out/vehicle_status_v1",self._on_px4_status,
+                VehicleStatus,"/fmu/out/vehicle_status_v4",self._on_px4_status,
                 QoSProfile(depth=10,reliability=ReliabilityPolicy.BEST_EFFORT))
         self.timer = self.create_timer(.05,self.publish_once)
         self.topic = topic

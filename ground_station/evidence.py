@@ -11,6 +11,27 @@ def _label(value, fallback="--"):
     return str(value) if value is not None and value != "" else fallback
 
 
+def _px4_state(packet, receive_age_ms):
+    px4 = (packet or {}).get("px4") or {}
+    age = px4.get("status_age_ms")
+    current = (px4.get("connected") is True and isinstance(age, (float, int))
+               and receive_age_ms is not None and age + receive_age_ms <= 1500)
+    if not current:
+        return {"node": ("DISCONNECTED", "PX4 telemetry stale", "muted"),
+                "connected": False, "mode": "--", "armed": "--", "failsafe": "--",
+                "local_position_valid": "--", "position": None, "velocity": None,
+                "status_age_ms": None, "nav_state": None, "ack": None}
+    valid = px4.get("local_position_valid")
+    return {"node": ("CONNECTED", "PX4 telemetry current", "authorized"),
+            "connected": True, "mode": _label(px4.get("mode")),
+            "armed": _label(px4.get("armed")), "failsafe": _label(px4.get("failsafe")),
+            "local_position_valid": ("VALID" if valid is True else
+                                     "INVALID" if valid is False else "--"),
+            "position": px4.get("position"), "velocity": px4.get("velocity"),
+            "status_age_ms": age + receive_age_ms, "nav_state": px4.get("nav_state"),
+            "ack": px4.get("last_vehicle_command_ack")}
+
+
 def competition_state(packet, receive_age_ms, *, video_ready=True,
                       metadata_stale_ms=500, overlay_timeout_ms=1000):
     policy = display_state(packet, receive_age_ms,
@@ -23,7 +44,9 @@ def competition_state(packet, receive_age_ms, *, video_ready=True,
             "authorization": ("--", "Evidence unavailable", "muted"),
             "gesture": ("--", "Evidence unavailable", "muted"),
             "safety": ("--", "Decision unavailable", "muted"),
-            "px4": ("DISCONNECTED", "No PX4 live link", "muted"),
+            "px4": ("DISCONNECTED", "PX4 telemetry unavailable", "muted"),
+            "px4_details": _px4_state(None, None),
+            "command_details": None,
             "operator_state": "METADATA LOST", "track": "--", "depth": "--",
             "control_gesture": "--", "control_intent": "--", "lease": "--",
             "control_safety": "NO CURRENT DATA", "stage6_reason": "--",
@@ -89,6 +112,13 @@ def competition_state(packet, receive_age_ms, *, video_ready=True,
         safety = ("INHIBITED", f"{intent} · {reason.replace('_', ' ')}", "warning")
         control_safety = "INHIBITED"
 
+    command = (packet.get("command") or {})
+    command_current = command.get("mode") == "SHADOW" and command.get("fresh") is True
+    if command_current and command.get("authority") == "BLOCKED" and valid and intent != "HOVER":
+        authority_reason = _label(command.get("authority_reason"), "FLIGHT_AUTHORITY_BLOCKED")
+        safety = ("COMMAND BLOCKED", authority_reason.replace("_", " "), "warning")
+        control_safety = "COMMAND BLOCKED"
+
     distance = (f"{depth['m']:.2f} m" if ai_live and person_visible and
                 depth.get("valid") and isinstance(depth.get("m"), (float, int)) else "--")
     system = ("VIDEO LOST" if not video_ready else
@@ -97,7 +127,9 @@ def competition_state(packet, receive_age_ms, *, video_ready=True,
         "metadata_ready": True, "ai_ready": ai_live,
         "perception": perception, "authorization": authorization,
         "gesture": gesture_node, "safety": safety,
-        "px4": ("DISCONNECTED", "No PX4 live link", "muted"),
+        "px4": _px4_state(packet, receive_age_ms)["node"],
+        "px4_details": _px4_state(packet, receive_age_ms),
+        "command_details": command if command_current else None,
         "operator_state": raw_state if ai_live else "AI STALE",
         "track": track if ai_live and person_visible else "--", "depth": distance,
         "control_gesture": gesture_node[0], "control_intent": intent,

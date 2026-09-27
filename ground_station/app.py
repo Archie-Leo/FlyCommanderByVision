@@ -120,7 +120,13 @@ class EngineeringDialog(QDialog):
         "Video age", "Sequence gaps", "Invalid packets", "FFmpeg restarts",
         "People count", "Track ID", "Session ID", "Pose score",
         "Raw gesture", "Stable gesture", "Stage6 valid", "Stage6 intent",
-        "Stage6 reason", "Stage6 lease", "Packet bytes", "Diagnostics",
+        "Stage6 reason", "Stage6 lease", "PX4 status age", "PX4 mode raw",
+        "PX4 armed", "PX4 failsafe", "Local position valid",
+        "Local position NED", "Local velocity NED", "Last VehicleCommand ACK",
+        "Command mode", "Command authority", "Authority reason",
+        "Gateway effective NED", "Gateway projected NED", "Projected intent",
+        "ROS2 to PX4", "Control trace",
+        "Packet bytes", "Diagnostics",
     )
 
     def __init__(self, parent=None):
@@ -224,7 +230,8 @@ class Console(QMainWindow):
         command_layout.setContentsMargins(14, 8, 14, 8)
         command_layout.setSpacing(3)
         command_layout.addWidget(label("COMMAND TO PX4", "flowTitle"))
-        command_layout.addWidget(label("NOT FORWARDED  ·  DRY-RUN MODE", "flowValue"))
+        self.command_value = label("NOT FORWARDED  ·  DRY-RUN MODE", "flowValue", wrap=True)
+        command_layout.addWidget(self.command_value)
         buttons = QHBoxLayout()
         buttons.setSpacing(5)
         self.flight_buttons = {}
@@ -241,7 +248,8 @@ class Console(QMainWindow):
         feedback_layout = QVBoxLayout(feedback)
         feedback_layout.setContentsMargins(14, 8, 14, 8)
         feedback_layout.addWidget(label("PX4 FEEDBACK", "flowTitle"))
-        feedback_layout.addWidget(label("NO DATA  ·  PX4 DISCONNECTED", "flowValue"))
+        self.feedback_value = label("NO DATA  ·  PX4 DISCONNECTED", "flowValue", wrap=True)
+        feedback_layout.addWidget(self.feedback_value)
         flow.addWidget(feedback, 1)
         outer.addLayout(flow)
 
@@ -249,7 +257,8 @@ class Console(QMainWindow):
         self.system_label = label("SYSTEM  ·  WAITING", "systemStatus")
         footer.addWidget(self.system_label)
         footer.addStretch(1)
-        footer.addWidget(label("CONTROL MODE  ·  DRY-RUN", "dryRun"))
+        self.control_mode_value = label("CONTROL MODE  ·  DRY-RUN", "dryRun")
+        footer.addWidget(self.control_mode_value)
         self.engineering_button = QPushButton("Engineering  ›")
         self.engineering_button.setObjectName("engineeringButton")
         footer.addWidget(self.engineering_button)
@@ -329,10 +338,29 @@ class Console(QMainWindow):
         for name, key in (("Gesture", "control_gesture"), ("Intent", "control_intent"),
                           ("Lease", "lease"), ("Safety", "control_safety")):
             self.control_card.put(name, state[key])
-        self.px4_card.set_status("DISCONNECTED", "No PX4 live link", "muted")
-        for name in ("Mode", "Armed", "Failsafe", "Local Pos"):
-            self.px4_card.put(name, "--")
+        px4 = state["px4_details"]
+        self.px4_card.set_status(*px4["node"])
+        for name, key in (("Mode", "mode"), ("Armed", "armed"),
+                          ("Failsafe", "failsafe"), ("Local Pos", "local_position_valid")):
+            self.px4_card.put(name, px4[key])
         self.px4_card.put("Control", "DRY-RUN")
+        command = state["command_details"]
+        if command is None:
+            command_text = "NOT FORWARDED  ·  DRY-RUN MODE"
+        else:
+            velocity = command.get("velocity") or [None, None, None]
+            values = ", ".join(shown(item) for item in velocity)
+            projected = command.get("projected_velocity") or [None, None, None]
+            projected_values = ", ".join(shown(item) for item in projected)
+            command_text = (f"SHADOW · NOT TRANSMITTED · {shown(command.get('intent'))} "
+                            f"· AUTHORITY {shown(command.get('authority'))} "
+                            f"· EFFECTIVE NED [{values}] m/s "
+                            f"· IF AUTHORIZED {shown(command.get('projected_intent'))} "
+                            f"NED [{projected_values}] m/s")
+        set_text(self.command_value, command_text)
+        set_text(self.feedback_value, (f"{px4['mode']}  ·  ARMED {px4['armed']}  ·  "
+                                       f"FAILSAFE {px4['failsafe']}  ·  LOCAL POS {px4['local_position_valid']}"
+                                       if px4["connected"] else "NO DATA  ·  PX4 DISCONNECTED"))
         set_text(self.system_label, "SYSTEM  ·  " + state["system"])
         if self.engineering.isVisible():
             self._refresh_engineering(packet if state["metadata_ready"] else None,
@@ -345,6 +373,12 @@ class Console(QMainWindow):
         stage6 = (packet or {}).get("stage6") or {}
         depth = (packet or {}).get("depth") or {}
         system = (packet or {}).get("system") or {}
+        px4 = competition_state(packet, metadata_age,
+            metadata_stale_ms=self.config["metadata_stale_ms"],
+            overlay_timeout_ms=self.config["overlay_timeout_ms"])["px4_details"]
+        command = (packet or {}).get("command") or {}
+        if command.get("fresh") is not True:
+            command = {}
         values = {
             "Board video FPS": shown(system.get("video_fps")),
             "AI FPS": shown(system.get("ai_fps")),
@@ -367,6 +401,24 @@ class Console(QMainWindow):
             "Stage6 intent": shown(stage6.get("intent")),
             "Stage6 reason": shown(stage6.get("reason")),
             "Stage6 lease": shown(stage6.get("lease")),
+            "PX4 status age": shown(round(px4["status_age_ms"]) if px4["status_age_ms"] is not None else None, " ms"),
+            "PX4 mode raw": shown(px4["nav_state"]),
+            "PX4 armed": px4["armed"], "PX4 failsafe": px4["failsafe"],
+            "Local position valid": px4["local_position_valid"],
+            "Local position NED": shown(px4["position"]),
+            "Local velocity NED": shown(px4["velocity"]),
+            "Last VehicleCommand ACK": shown(px4["ack"]),
+            "Command mode": shown(command.get("mode")),
+            "Command authority": shown(command.get("authority")),
+            "Authority reason": shown(command.get("authority_reason")),
+            "Gateway effective NED": shown(command.get("velocity")),
+            "Gateway projected NED": shown(command.get("projected_velocity")),
+            "Projected intent": shown(command.get("projected_intent")),
+            "ROS2 to PX4": "NOT TRANSMITTED" if command else "--",
+            "Control trace": (f"{shown(gesture.get('stable'))} → {shown(stage6.get('intent'))} "
+                              f"→ {shown(command.get('authority'))} → "
+                              f"{shown(command.get('projected_intent'))} → NOT TRANSMITTED"
+                              if command else "--"),
             "Packet bytes": "--", "Diagnostics": "NOT AVAILABLE IN V1",
         }
         for name, value in values.items():

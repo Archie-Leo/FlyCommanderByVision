@@ -2,19 +2,25 @@
 from __future__ import annotations
 
 import copy
+import json
 import socket
 import threading
 import time
 
 from .protocol import empty_snapshot, encode_packet, finite
+from .px4_telemetry import read_px4_snapshot
 
 
 class MetadataSender:
-    def __init__(self, host, port=5603, hz=20, *, dry_run=None):
+    def __init__(self, host, port=5603, hz=20, *, dry_run=None, px4_file=None,
+                 command_file=None, authority_snapshot=None):
         if not 1 <= hz <= 30 or not 1 <= port <= 65535:
             raise ValueError("invalid metadata rate or port")
         self.address = (host, port)
         self.dry_run = dry_run
+        self.px4_file = px4_file
+        self.command_file = command_file
+        self.authority_snapshot = authority_snapshot
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.setblocking(False)
         self.period = 1 / hz
@@ -56,6 +62,33 @@ class MetadataSender:
                 packet["stage6"] = {"intent": decision.get("intent", "HOVER"),
                     "valid": bool(decision.get("valid", False)),
                     "reason": decision.get("reason"), "lease": safety.get("lease_state")}
+            if self.px4_file is not None:
+                packet["px4"] = read_px4_snapshot(self.px4_file)
+            if self.command_file is not None:
+                try:
+                    command = json.loads(self.command_file.read_text(encoding="utf-8"))
+                    age_ns = time.monotonic_ns() - command["monotonic_ns"]
+                    if not 0 <= age_ns <= 500_000_000 or command.get("mode") != "SHADOW":
+                        raise ValueError("stale gateway shadow")
+                    packet["command"] = {
+                        "mode": "SHADOW", "fresh": True, "transmitted": False,
+                        "intent": command.get("intent"),
+                        "frame": command.get("frame"),
+                        "velocity": command.get("velocity"),
+                        "yawspeed": command.get("yawspeed"),
+                        "projected_intent": command.get("projected_intent"),
+                        "projected_velocity": command.get("projected_velocity"),
+                        "projected_yawspeed": command.get("projected_yawspeed"),
+                        }
+                except (OSError, ValueError, TypeError, KeyError):
+                    packet["command"] = {"mode": "SHADOW", "transmitted": False,
+                                         "fresh": False}
+                if self.authority_snapshot is not None:
+                    authority = self.authority_snapshot()
+                    packet["command"]["authority"] = (
+                        "GRANTED" if authority.get("flight_authority_enabled") else "BLOCKED")
+                    packet["command"]["authority_reason"] = authority.get(
+                        "authority_transition_reason")
             try:
                 data = encode_packet(packet)
                 self.socket.sendto(data, self.address)

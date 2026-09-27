@@ -56,6 +56,20 @@ class CompetitionQtTests(unittest.TestCase):
                 self.assertEqual(station.nodes["PX4"].value.text(), "DISCONNECTED")
                 self.assertEqual(station.nodes["PERCEPTION"].value.text(), "NO PERSON")
                 self.assertEqual(station.system_label.text(), "SYSTEM  ·  VIDEO LOST")
+                metadata.packet["px4"] = {"connected": True, "status_age_ms": 80,
+                    "mode": "AUTO_LOITER", "nav_state": 4, "armed": False,
+                    "failsafe": False, "local_position_valid": False}
+                metadata.packet["command"] = {"mode": "SHADOW", "fresh": True,
+                    "transmitted": False, "intent": "HOVER", "velocity": [0, 0, 0],
+                    "projected_intent": "MOVE_RIGHT", "projected_velocity": [0, 0.8, 0],
+                    "authority": "BLOCKED", "authority_reason": "PX4_DISARMED"}
+                station.last_ui_at = 0
+                station.refresh()
+                self.assertEqual(station.nodes["PX4"].value.text(), "CONNECTED")
+                self.assertEqual(station.px4_card.rows["Mode"].text(), "AUTO_LOITER")
+                self.assertEqual(station.px4_card.rows["Local Pos"].text(), "INVALID")
+                self.assertIn("NOT TRANSMITTED", station.command_value.text())
+                self.assertIn("MOVE_RIGHT", station.command_value.text())
                 self.assertFalse(station.engineering.isVisible())
                 self.assertTrue(all(not button.isEnabled()
                                     for button in station.flight_buttons.values()))
@@ -64,6 +78,7 @@ class CompetitionQtTests(unittest.TestCase):
                 self.assertTrue(station.engineering.isVisible())
                 self.assertEqual(station.engineering.fields["People count"].text(), "0")
                 self.assertEqual(station.engineering.fields["Stage6 intent"].text(), "HOVER")
+                self.assertEqual(station.engineering.fields["Command authority"].text(), "BLOCKED")
                 self.assertEqual(station.engineering.fields["Packet bytes"].text(), "--")
                 station.toggle_engineering()
                 self.app.processEvents()
@@ -80,6 +95,8 @@ class CompetitionQtTests(unittest.TestCase):
                 station.refresh()
                 self.assertEqual(station.nodes["PERCEPTION"].value.text(), "METADATA LOST")
                 self.assertEqual(station.nodes["GESTURE"].value.text(), "--")
+                self.assertEqual(station.nodes["PX4"].value.text(), "DISCONNECTED")
+                self.assertNotIn("MOVE_RIGHT", station.command_value.text())
             finally:
                 station.close()
                 self.app.processEvents()

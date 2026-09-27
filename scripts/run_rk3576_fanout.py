@@ -382,6 +382,12 @@ def parse_args():
     p.add_argument("--metadata-host", help="Optional read-only UDP ground-station destination")
     p.add_argument("--metadata-port", type=int, default=5603)
     p.add_argument("--metadata-hz", type=float, default=20)
+    p.add_argument("--px4-telemetry-file", type=Path,
+                   help="Optional local read-only PX4 state file from px4_telemetry_readonly.py")
+    p.add_argument("--px4-shadow", action="store_true",
+                   help="Publish Stage6 Intent to isolated shadow Gateway topic; no PX4 input")
+    p.add_argument("--gateway-shadow-file", type=Path,
+                   default=Path("/tmp/fcv_gateway_shadow.json"))
     return p.parse_args()
 
 
@@ -389,6 +395,8 @@ def main():
     args = parse_args()
     if args.async_depth and not args.async_perception:
         raise ValueError("--async-depth requires --async-perception")
+    if args.px4_shadow and (args.px4_telemetry_file is None or not args.metadata_host):
+        raise ValueError("PX4 shadow requires read-only telemetry and metadata")
     if args.metadata_host:
         ipaddress.ip_address(args.metadata_host)
         if args.no_ai:
@@ -419,6 +427,8 @@ def main():
     metadata_sender = None
     metadata_adapter = None
     metadata_snapshot_errors = 0
+    shadow_node = shadow_thread = shadow_rclpy = candidate_publisher = None
+    candidate_msg_type = candidate_operator_id = None
     started = time.monotonic()
     last_report_at = started
     last_cpu_at = os.times()
@@ -460,11 +470,29 @@ def main():
             evaluator = PoseQualityEvaluator(config.quality)
             normalizer = SkeletonNormalizer(config.normalization)
             dry_run = Stage6DryRun(args.stage6_jsonl)
+            if args.px4_shadow:
+                import rclpy as shadow_rclpy
+                from stage6.ros_intent_node import (AuthorizedIntentPublisher,
+                    SHADOW_TOPIC, operator_id_from_session)
+                from drone_control_gateway.msg import Intent as CandidateIntent
+                shadow_rclpy.init()
+                shadow_node = AuthorizedIntentPublisher(topic=SHADOW_TOPIC)
+                candidate_msg_type = CandidateIntent
+                candidate_operator_id = operator_id_from_session
+                candidate_publisher = shadow_node.create_publisher(
+                    CandidateIntent, "/interaction/candidate_shadow", 10)
+                shadow_thread = threading.Thread(target=shadow_rclpy.spin,
+                    args=(shadow_node,), name="px4-shadow-intent", daemon=True)
+                shadow_thread.start()
             if args.metadata_host:
                 try:
                     metadata_adapter = RectifiedAnalysisToVideoDisplayAdapter(*depth.maps[0])
                     metadata_sender = MetadataSender(args.metadata_host, args.metadata_port,
-                                                      args.metadata_hz, dry_run=dry_run)
+                                                      args.metadata_hz, dry_run=dry_run,
+                                                      px4_file=args.px4_telemetry_file,
+                                                      command_file=(args.gateway_shadow_file if args.px4_shadow else None),
+                                                      authority_snapshot=(shadow_node.authority_snapshot
+                                                                          if shadow_node else None))
                 except (OSError, ValueError) as exc:
                     print(f"Metadata disabled: {exc}", file=sys.stderr, flush=True)
             lease_thread = threading.Thread(target=run_lease_clock, args=(dry_run, lease_stop),
@@ -511,6 +539,22 @@ def main():
                 if args.async_depth:
                     stage_times["async_depth"] = analysis_depth.status()
                 dry_run.submit(authorized, record)
+                if shadow_node is not None:
+                    shadow_node.submit(authorized, record)
+                    candidate = dry_run.snapshot()["stage6_decision"]
+                    if candidate is not None:
+                        message = candidate_msg_type()
+                        message.stamp = shadow_node.get_clock().now().to_msg()
+                        message.operator_id = candidate_operator_id(
+                            candidate.get("operator_session_id"))
+                        message.intent = candidate["intent"]
+                        message.confidence = float(candidate["confidence"])
+                        message.valid = bool(candidate["valid"])
+                        message.seq = int(candidate["seq"])
+                        message.reason = candidate["reason"]
+                        message.requested_speed_m_s = 0.0
+                        message.requested_yaw_rate_rad_s = 0.0
+                        candidate_publisher.publish(message)
                 if metadata_sender is not None:
                     try:
                         visual = build_visual_snapshot(pose_frame, people, record,
@@ -664,6 +708,11 @@ def main():
             lease_thread.join(timeout=2)
         if metadata_sender is not None:
             metadata_sender.close()
+        if shadow_node is not None:
+            shadow_node.stop_and_publish()
+            shadow_rclpy.shutdown()
+            shadow_thread.join(timeout=2)
+            shadow_node.destroy_node()
         if dry_run is not None:
             dry_run.close()
         if args.async_depth and analysis_depth is not None:

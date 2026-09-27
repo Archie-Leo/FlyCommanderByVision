@@ -88,6 +88,42 @@ class EvidenceMappingTests(unittest.TestCase):
         self.assertEqual(state["gesture"][0], "--")
         self.assertFalse(state["person_visible"])
 
+    def test_px4_uses_actual_status_and_clears_on_timeout(self):
+        packet = self.packet()
+        packet["px4"] = {"connected": True, "status_age_ms": 100,
+                         "mode": "AUTO_LOITER", "nav_state": 4,
+                         "armed": False, "failsafe": False,
+                         "local_position_valid": False,
+                         "position": None, "velocity": None}
+        current = competition_state(packet, 20)
+        self.assertEqual(current["px4"][0], "CONNECTED")
+        self.assertEqual(current["px4_details"]["mode"], "AUTO_LOITER")
+        self.assertEqual(current["px4_details"]["armed"], "False")
+        self.assertEqual(current["px4_details"]["local_position_valid"], "INVALID")
+        stale = competition_state(packet, 1490, metadata_stale_ms=2000)
+        self.assertEqual(stale["px4"][0], "DISCONNECTED")
+        self.assertEqual(stale["px4_details"]["mode"], "--")
+        self.assertEqual(stale["px4_details"]["armed"], "--")
+
+    def test_shadow_command_is_labeled_and_authority_blocks_motion(self):
+        packet = self.packet()
+        packet["operator"].update(state="LOCKED_HIGH", kind="operator",
+                                  track_id=3, bbox=[1, 2, 3, 4])
+        packet["gesture"]["stable"] = "RIGHT"
+        packet["stage6"].update(intent="MOVE_RIGHT", valid=True,
+                                reason="AUTHORIZED_GESTURE_FRESH")
+        packet["command"] = {"mode": "SHADOW", "fresh": True,
+                             "transmitted": False, "intent": "HOVER",
+                             "velocity": [0, 0, 0], "projected_intent": "MOVE_RIGHT",
+                             "projected_velocity": [0, 0.8, 0],
+                             "authority": "BLOCKED",
+                             "authority_reason": "PX4_DISARMED"}
+        state = competition_state(packet, 10)
+        self.assertEqual(state["safety"][0], "COMMAND BLOCKED")
+        self.assertEqual(state["command_details"]["projected_intent"], "MOVE_RIGHT")
+        packet["command"]["fresh"] = False
+        self.assertIsNone(competition_state(packet, 10)["command_details"])
+
 
 if __name__ == "__main__":
     unittest.main()

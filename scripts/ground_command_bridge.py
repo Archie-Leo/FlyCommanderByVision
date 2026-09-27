@@ -26,9 +26,11 @@ class Bridge:
         import rclpy
         from px4_msgs.msg import (VehicleCommand, VehicleCommandAck,
                                   VehicleLandDetected, VehicleLocalPosition, VehicleStatus)
+        from rclpy.executors import ExternalShutdownException
         from rclpy.node import Node
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
         self.rclpy = rclpy
+        self.ExternalShutdownException = ExternalShutdownException
         self.VehicleCommand = VehicleCommand
         rclpy.init()
         self.node = Node("fcv_ground_command_bridge")
@@ -221,6 +223,8 @@ class Bridge:
                         self._send_feedback(self.client)
                 else:
                     self._write_state()
+        except self.ExternalShutdownException:
+            pass
         finally:
             self.sock.close()
             if self.transaction and self.transaction.active:
@@ -229,7 +233,8 @@ class Bridge:
                 self.db.commit()
             self.db.close()
             self.node.destroy_node()
-            self.rclpy.shutdown()
+            if self.rclpy.ok():
+                self.rclpy.shutdown()
 
 
 def main():

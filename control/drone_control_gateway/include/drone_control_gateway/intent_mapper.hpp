@@ -22,6 +22,13 @@ struct MappingResult
   std::string reason{};
 };
 
+struct ControlFrameContext
+{
+  float heading_rad{0.0F};
+  bool heading_valid{false};
+  bool heading_fresh{false};
+};
+
 struct MapperConfig
 {
   float forward_speed_mps{0.8F};
@@ -39,7 +46,8 @@ public:
   explicit IntentMapper(MapperConfig config);
   MappingResult map(
     const std::string & intent, bool valid, float requested_speed_m_s,
-    float requested_yaw_rate_rad_s = 0.0F) const;
+    float requested_yaw_rate_rad_s = 0.0F,
+    const ControlFrameContext & frame = {}) const;
   const MapperConfig & config() const noexcept {return config_;}
 
 private:

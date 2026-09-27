@@ -49,7 +49,7 @@ IntentMapper::IntentMapper(MapperConfig config) : config_(config)
 
 MappingResult IntentMapper::map(
   const std::string & intent, bool valid, float requested_speed_m_s,
-  float requested_yaw_rate_rad_s) const
+  float requested_yaw_rate_rad_s, const ControlFrameContext & frame) const
 {
   MappingResult result;
   if (!valid) {
@@ -78,10 +78,25 @@ MappingResult IntentMapper::map(
   } else if (command == "MOVE_BACKWARD") {
     result.velocity.north_mps = -forward;
   } else if (command == "MOVE_RIGHT") {
-    // PX4 local NED world frame: +Y is East. V1 RIGHT means world East, not body-right.
-    result.velocity.east_mps = lateral;
+    // Facing the camera: operator right is vehicle body left. PX4 yaw is from NED North.
+    if (!frame.heading_fresh || !frame.heading_valid || !std::isfinite(frame.heading_rad)) {
+      result.accepted = false;
+      result.canonical_intent = "HOVER";
+      result.reason = !frame.heading_fresh ? "HEADING_STALE" : "HEADING_INVALID";
+      return result;
+    }
+    result.velocity.north_mps = lateral * std::sin(frame.heading_rad);
+    result.velocity.east_mps = -lateral * std::cos(frame.heading_rad);
   } else if (command == "MOVE_LEFT") {
-    result.velocity.east_mps = -lateral;
+    // Facing the camera: operator left is vehicle body right.
+    if (!frame.heading_fresh || !frame.heading_valid || !std::isfinite(frame.heading_rad)) {
+      result.accepted = false;
+      result.canonical_intent = "HOVER";
+      result.reason = !frame.heading_fresh ? "HEADING_STALE" : "HEADING_INVALID";
+      return result;
+    }
+    result.velocity.north_mps = -lateral * std::sin(frame.heading_rad);
+    result.velocity.east_mps = lateral * std::cos(frame.heading_rad);
   } else if (command == "ASCEND") {
     // PX4 NED: +Z is Down, therefore ascending requires negative Z velocity.
     result.velocity.down_mps = -vertical;

@@ -10,8 +10,8 @@ from ground_station.board_snapshot import build_visual_snapshot
 from ground_station.coordinate_adapter import RectifiedAnalysisToVideoDisplayAdapter
 from ground_station.display_policy import display_state
 from ground_station.metadata_receiver import MetadataReceiver
-from ground_station.protocol import JOINTS, decode_packet, empty_snapshot, encode_packet
-from ground_station.sender import MetadataSender
+from ground_station.protocol import JOINTS, MAX_PACKET_BYTES, decode_packet, empty_snapshot, encode_packet
+from ground_station.sender import MetadataSender, encode_with_optional_limiter
 
 
 class Map:
@@ -26,6 +26,16 @@ class Map:
 
 
 class GroundStationTests(unittest.TestCase):
+    def test_optional_limiter_never_drops_existing_metadata_packet(self):
+        packet = empty_snapshot()
+        packet["command"] = {"mode": "SHADOW", "pad": "x" * 600}
+        base_size = len(encode_packet(packet))
+        packet["command"]["pad"] += "x" * (MAX_PACKET_BYTES - base_size - 5)
+        self.assertLessEqual(len(encode_packet(packet)), MAX_PACKET_BYTES)
+        packet["command"]["limiter"] = ["L", 3, 0.5, 0.5, 0.3]
+        encoded = encode_with_optional_limiter(packet)
+        self.assertNotIn("limiter", decode_packet(encoded)["command"])
+
     def test_coordinate_center_edges_and_rotation(self):
         identity = RectifiedAnalysisToVideoDisplayAdapter(Map("x"), Map("y"))
         for point in ((640.,480.), (1.,1.), (1278.,958.)):

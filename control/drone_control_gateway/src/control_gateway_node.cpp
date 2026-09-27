@@ -1,9 +1,11 @@
 #include "drone_control_gateway/intent_mapper.hpp"
+#include "drone_control_gateway/demo_safety_limiter.hpp"
 #include "drone_control_gateway/msg/intent.hpp"
 
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/trajectory_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_local_position.hpp>
+#include <px4_msgs/msg/vehicle_status.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include <array>
@@ -30,7 +32,10 @@ public:
   : Node("control_gateway"),
     mapper_(load_mapper_config()),
     lease_(std::chrono::duration<double>(
-        declare_parameter<double>("command_timeout_s", 0.5)))
+        declare_parameter<double>("command_timeout_s", 0.5))),
+    limiter_config_(load_safety_config()),
+    limiter_(limiter_config_),
+    projected_limiter_(limiter_config_)
   {
     shadow_mode_ = declare_parameter<bool>("shadow_mode", false);
     shadow_snapshot_path_ = declare_parameter<std::string>("shadow_snapshot_path", "");
@@ -71,6 +76,23 @@ public:
         heading_rad_ = msg->heading;
         heading_good_for_control_ = msg->heading_good_for_control;
         heading_received_at_ = CommandLease::Clock::now();
+        position_.x = msg->x;
+        position_.y = msg->y;
+        position_.z = msg->z;
+        position_.xy_valid = msg->xy_valid;
+        position_.z_valid = msg->z_valid;
+        position_.source_fresh = heading_sample_fresh_;
+        position_.received_at = heading_received_at_;
+      });
+    status_sub_ = create_subscription<px4_msgs::msg::VehicleStatus>(
+      "/fmu/out/vehicle_status_v4",
+      rclcpp::QoS(rclcpp::KeepLast(5)).best_effort().transient_local(),
+      [this](px4_msgs::msg::VehicleStatus::SharedPtr msg) {
+        std::lock_guard<std::mutex> lock(command_mutex_);
+        status_armed_ = msg->arming_state == msg->ARMING_STATE_ARMED;
+        status_offboard_ = msg->nav_state == msg->NAVIGATION_STATE_OFFBOARD;
+        status_failsafe_ = msg->failsafe;
+        status_received_at_ = CommandLease::Clock::now();
       });
 
     const double heartbeat_hz = declare_parameter<double>("heartbeat_hz", 10.0);
@@ -134,6 +156,20 @@ private:
     return config;
   }
 
+  DemoSafetyConfig load_safety_config()
+  {
+    DemoSafetyConfig config;
+    config.horizontal_cap_mps = static_cast<float>(
+      declare_parameter<double>("demo_horizontal_cap_mps", 0.30));
+    config.vertical_cap_mps = static_cast<float>(
+      declare_parameter<double>("demo_vertical_cap_mps", 0.20));
+    config.episode_limit_m = static_cast<float>(
+      declare_parameter<double>("demo_episode_limit_m", 0.50));
+    config.position_timeout = std::chrono::milliseconds(
+      declare_parameter<int>("demo_position_timeout_ms", 500));
+    return config;
+  }
+
   void on_intent(const drone_control_gateway::msg::Intent::SharedPtr msg)
   {
     MappingResult mapped;
@@ -141,9 +177,14 @@ private:
     {
       std::lock_guard<std::mutex> lock(command_mutex_);
       last_intent_msg_ = msg;
+      last_intent_received_at_ = CommandLease::Clock::now();
+      if (msg->reason == "FRESH_GESTURE_READY") {
+        trusted_release_pending_ = true;
+      }
       mapped = mapper_.map(msg->intent, msg->valid,
         msg->requested_speed_m_s, msg->requested_yaw_rate_rad_s,
         frame_context_locked(CommandLease::Clock::now()));
+      last_mapped_ = mapped;
       lease_.update(mapped, CommandLease::Clock::now());
       should_log = msg->seq != last_logged_seq_ ||
         mapped.canonical_intent != last_logged_intent_ || !mapped.accepted;
@@ -175,6 +216,8 @@ private:
     uint64_t projected_seq = 0;
     std::string candidate_intent;
     bool timed_out = false;
+    LimiterSnapshot limiter_snapshot;
+    LimiterSnapshot projected_snapshot;
     {
       std::lock_guard<std::mutex> lock(command_mutex_);
       const auto now = CommandLease::Clock::now();
@@ -187,6 +230,7 @@ private:
         if (!command.accepted) {
           // Revoke an active lateral lease as soon as heading becomes unsafe.
           lease_.update(command, now);
+          last_mapped_ = command;
         }
       }
       if (shadow_mode_ && candidate_msg_ && now - candidate_received_at_ <= 500ms) {
@@ -194,6 +238,32 @@ private:
           candidate_msg_->requested_speed_m_s, candidate_msg_->requested_yaw_rate_rad_s, frame);
         projected_seq = candidate_seq_;
         candidate_intent = candidate_msg_->intent;
+      }
+      const bool status_fresh = status_received_at_ != CommandLease::Clock::time_point{} &&
+        now >= status_received_at_ && now - status_received_at_ <= 1500ms;
+      const bool flight_authority = status_fresh && status_armed_ && status_offboard_ &&
+        !status_failsafe_;
+      const bool intent_current = last_intent_msg_ && !timed_out &&
+        now - last_intent_received_at_ <= 500ms;
+      if (intent_current && !command.accepted) {
+        command = last_mapped_;
+      }
+      command = limiter_.apply(
+        intent_current ? last_intent_msg_->intent : "UNKNOWN",
+        intent_current && last_intent_msg_->valid,
+        last_intent_msg_ ? static_cast<uint64_t>(last_intent_msg_->operator_id) : 0,
+        !shadow_mode_ && flight_authority, command, position_, now,
+        trusted_release_pending_ && flight_authority);
+      trusted_release_pending_ = false;
+      limiter_snapshot = limiter_.snapshot();
+      if (shadow_mode_) {
+        const bool candidate_current = candidate_msg_ && now - candidate_received_at_ <= 500ms;
+        projected = projected_limiter_.apply(
+          candidate_current ? candidate_msg_->intent : "UNKNOWN",
+          candidate_current && candidate_msg_->valid,
+          candidate_current ? static_cast<uint64_t>(candidate_msg_->operator_id) : 0,
+          true, projected, position_, now);
+        projected_snapshot = projected_limiter_.snapshot();
       }
     }
     if (timed_out) {
@@ -248,6 +318,16 @@ private:
            << ",\"projected_velocity\":[" << projected.velocity.north_mps << ','
            << projected.velocity.east_mps << ',' << projected.velocity.down_mps << ']'
            << ",\"projected_yawspeed\":" << projected.yaw_rate_ned_rad_s
+           << ",\"safety_limiter_state\":\"" << episode_state_name(projected_snapshot.state) << "\""
+           << ",\"episode_id\":" << projected_snapshot.episode_id
+           << ",\"episode_intent\":\"" << projected_snapshot.episode_intent << "\""
+           << ",\"episode_distance_m\":" << projected_snapshot.distance_m
+           << ",\"episode_limit_m\":" << projected_snapshot.limit_m
+           << ",\"velocity_cap_mps\":" << projected_snapshot.velocity_cap_mps
+           << ",\"limit_reached\":" <<
+              (projected_snapshot.state == EpisodeState::LIMIT_REACHED ? "true" : "false")
+           << ",\"limiter_reason\":\"" << projected_snapshot.reason << "\""
+           << ",\"effective_limiter_state\":\"" << episode_state_name(limiter_snapshot.state) << "\""
            << ",\"timed_out\":" << (timed_out ? "true" : "false")
            << ",\"velocity\":[" << setpoint.velocity[0] << ','
            << setpoint.velocity[1] << ',' << setpoint.velocity[2] << ']'
@@ -271,6 +351,9 @@ private:
 
   IntentMapper mapper_;
   CommandLease lease_;
+  DemoSafetyConfig limiter_config_;
+  DemoSafetyLimiter limiter_;
+  DemoSafetyLimiter projected_limiter_;
   bool shadow_mode_{false};
   std::string shadow_snapshot_path_;
   std::string shadow_trace_path_;
@@ -280,10 +363,18 @@ private:
   std::string last_intent_reason_;
   drone_control_gateway::msg::Intent::SharedPtr candidate_msg_;
   drone_control_gateway::msg::Intent::SharedPtr last_intent_msg_;
+  MappingResult last_mapped_{};
+  CommandLease::Clock::time_point last_intent_received_at_{};
+  bool trusted_release_pending_{false};
   float heading_rad_{0.0F};
   bool heading_good_for_control_{false};
   bool heading_sample_fresh_{false};
   CommandLease::Clock::time_point heading_received_at_{};
+  LocalPositionSample position_{};
+  bool status_armed_{false};
+  bool status_offboard_{false};
+  bool status_failsafe_{true};
+  CommandLease::Clock::time_point status_received_at_{};
   uint64_t candidate_seq_{0};
   CommandLease::Clock::time_point candidate_received_at_{};
   std::mutex command_mutex_;
@@ -295,6 +386,7 @@ private:
   rclcpp::Subscription<drone_control_gateway::msg::Intent>::SharedPtr intent_sub_;
   rclcpp::Subscription<drone_control_gateway::msg::Intent>::SharedPtr candidate_sub_;
   rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr heading_sub_;
+  rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr status_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 

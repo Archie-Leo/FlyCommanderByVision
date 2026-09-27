@@ -118,6 +118,14 @@ def competition_state(packet, receive_age_ms, *, video_ready=True,
         authority_reason = _label(command.get("authority_reason"), "FLIGHT_AUTHORITY_BLOCKED")
         safety = ("COMMAND BLOCKED", authority_reason.replace("_", " "), "warning")
         control_safety = "COMMAND BLOCKED"
+    limiter = command.get("limiter") or []
+    limiter_state = limiter[0] if isinstance(limiter, list) and limiter else None
+    if command_current and limiter_state == "L":
+        safety = ("SAFE HOVER", "DISTANCE LIMIT", "warning")
+        control_safety = "LIMITED"
+    elif command_current and limiter_state == "P":
+        safety = ("SAFE HOVER", "POSITION INVALID", "warning")
+        control_safety = "SAFE HOVER"
 
     distance = (f"{depth['m']:.2f} m" if ai_live and person_visible and
                 depth.get("valid") and isinstance(depth.get("m"), (float, int)) else "--")

@@ -7,5 +7,9 @@ control_gateway:
     vertical_speed_mps: 0.5
     max_horizontal_speed_mps: 1.0
     max_vertical_speed_mps: 0.7
+    demo_horizontal_cap_mps: 0.30
+    demo_vertical_cap_mps: 0.20
+    demo_episode_limit_m: 0.50
+    demo_position_timeout_ms: 500
     yaw_rate_rad_s: 0.35
     max_yaw_rate_rad_s: 0.6

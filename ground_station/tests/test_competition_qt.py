@@ -63,6 +63,8 @@ class CompetitionQtTests(unittest.TestCase):
                     "transmitted": False, "intent": "HOVER", "velocity": [0, 0, 0],
                     "projected_intent": "MOVE_RIGHT", "projected_velocity": [0, 0.8, 0],
                     "authority": "BLOCKED", "authority_reason": "PX4_DISARMED"}
+                metadata.packet["command"].update(
+                    limiter=["L", 3, 0.5, 0.5, 0.3])
                 station.last_ui_at = 0
                 station.refresh()
                 self.assertEqual(station.nodes["PX4"].value.text(), "CONNECTED")
@@ -79,6 +81,9 @@ class CompetitionQtTests(unittest.TestCase):
                 self.assertEqual(station.engineering.fields["People count"].text(), "0")
                 self.assertEqual(station.engineering.fields["Stage6 intent"].text(), "HOVER")
                 self.assertEqual(station.engineering.fields["Command authority"].text(), "BLOCKED")
+                self.assertEqual(station.nodes["SAFETY"].value.text(), "SAFE HOVER")
+                self.assertEqual(station.engineering.fields["Limiter state"].text(), "LIMIT_REACHED")
+                self.assertEqual(station.engineering.fields["Episode limit"].text(), "0.5 m")
                 self.assertEqual(station.engineering.fields["Packet bytes"].text(), "--")
                 station.toggle_engineering()
                 self.app.processEvents()

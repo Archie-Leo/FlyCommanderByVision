@@ -124,6 +124,19 @@ class EvidenceMappingTests(unittest.TestCase):
         packet["command"]["fresh"] = False
         self.assertIsNone(competition_state(packet, 10)["command_details"])
 
+    def test_shadow_distance_limit_shows_safe_hover_without_stale_claim(self):
+        packet = self.packet()
+        packet["stage6"].update(intent="MOVE_RIGHT", valid=True,
+                                reason="AUTHORIZED_GESTURE_FRESH")
+        packet["command"] = {"mode": "SHADOW", "fresh": True,
+                             "transmitted": False,
+                             "limiter": ["L", 4, 0.5, 0.5, 0.3]}
+        state = competition_state(packet, 10)
+        self.assertEqual(state["safety"][:2], ("SAFE HOVER", "DISTANCE LIMIT"))
+        self.assertEqual(state["control_safety"], "LIMITED")
+        packet["command"]["fresh"] = False
+        self.assertNotEqual(competition_state(packet, 10)["control_safety"], "LIMITED")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,14 +22,20 @@ target_include_directories(intent_mapper PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
+add_library(demo_safety_limiter src/demo_safety_limiter.cpp)
+target_compile_features(demo_safety_limiter PUBLIC cxx_std_17)
+target_include_directories(demo_safety_limiter PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
 add_executable(control_gateway_node src/control_gateway_node.cpp)
 target_compile_features(control_gateway_node PUBLIC cxx_std_17)
-target_link_libraries(control_gateway_node intent_mapper)
+target_link_libraries(control_gateway_node intent_mapper demo_safety_limiter)
 ament_target_dependencies(control_gateway_node px4_msgs rclcpp)
 rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} rosidl_typesupport_cpp)
 target_link_libraries(control_gateway_node "${cpp_typesupport_target}")
 
-install(TARGETS intent_mapper control_gateway_node
+install(TARGETS intent_mapper demo_safety_limiter control_gateway_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME})
@@ -41,6 +47,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_intent_mapper test/test_intent_mapper.cpp)
   target_link_libraries(test_intent_mapper intent_mapper)
   target_include_directories(test_intent_mapper PRIVATE include)
+  ament_add_gtest(test_demo_safety_limiter test/test_demo_safety_limiter.cpp)
+  target_link_libraries(test_demo_safety_limiter demo_safety_limiter intent_mapper)
+  target_include_directories(test_demo_safety_limiter PRIVATE include)
 endif()
 
 ament_export_include_directories(include)

@@ -125,6 +125,8 @@ class EngineeringDialog(QDialog):
         "Local position NED", "Local velocity NED", "Last VehicleCommand ACK",
         "Command mode", "Command authority", "Authority reason",
         "Gateway effective NED", "Gateway projected NED", "Projected intent",
+        "Limiter state", "Episode", "Episode distance", "Episode limit",
+        "Velocity cap", "Limiter reason",
         "ROS2 to PX4", "Control trace",
         "Packet bytes", "Diagnostics",
     )
@@ -379,6 +381,13 @@ class Console(QMainWindow):
         command = (packet or {}).get("command") or {}
         if command.get("fresh") is not True:
             command = {}
+        limiter = command.get("limiter") or []
+        def limiter_value(index):
+            return limiter[index] if isinstance(limiter, list) and len(limiter) > index else None
+        limiter_state = {"I": "IDLE", "A": "ACTIVE", "L": "LIMIT_REACHED",
+                         "P": "BLOCKED_INVALID_POSITION"}.get(limiter_value(0))
+        limiter_reason = {"L": "EPISODE_DISTANCE_LIMIT",
+                          "P": "POSITION_OR_MAPPING_BLOCKED"}.get(limiter_value(0))
         values = {
             "Board video FPS": shown(system.get("video_fps")),
             "AI FPS": shown(system.get("ai_fps")),
@@ -414,6 +423,12 @@ class Console(QMainWindow):
             "Gateway effective NED": shown(command.get("velocity")),
             "Gateway projected NED": shown(command.get("projected_velocity")),
             "Projected intent": shown(command.get("projected_intent")),
+            "Limiter state": shown(limiter_state),
+            "Episode": f"{shown(limiter_value(1))} · {shown(stage6.get('intent'))}",
+            "Episode distance": shown(limiter_value(2), " m"),
+            "Episode limit": shown(limiter_value(3), " m"),
+            "Velocity cap": shown(limiter_value(4), " m/s"),
+            "Limiter reason": shown(limiter_reason),
             "ROS2 to PX4": "NOT TRANSMITTED" if command else "--",
             "Control trace": (f"{shown(gesture.get('stable'))} → {shown(stage6.get('intent'))} "
                               f"→ {shown(command.get('authority'))} → "

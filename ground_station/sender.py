@@ -11,6 +11,18 @@ from .protocol import empty_snapshot, encode_packet, finite
 from .px4_telemetry import read_px4_snapshot
 
 
+def encode_with_optional_limiter(packet):
+    """Preserve metadata if optional limiter evidence would exceed the MTU."""
+    try:
+        return encode_packet(packet)
+    except ValueError:
+        command = packet.get("command") or {}
+        if not isinstance(command, dict) or "limiter" not in command:
+            raise
+        command.pop("limiter")
+        return encode_packet(packet)
+
+
 class MetadataSender:
     def __init__(self, host, port=5603, hz=20, *, dry_run=None, px4_file=None,
                  command_file=None, authority_snapshot=None):
@@ -80,6 +92,18 @@ class MetadataSender:
                         "projected_velocity": command.get("projected_velocity"),
                         "projected_yawspeed": command.get("projected_yawspeed"),
                         }
+                    state_code = {"IDLE": "I", "ACTIVE": "A",
+                                  "LIMIT_REACHED": "L",
+                                  "BLOCKED_INVALID_POSITION": "P"}.get(
+                                      command.get("safety_limiter_state"))
+                    if state_code is not None:
+                        # Full fields stay in Gateway trace. Five wire values
+                        # fit with skeleton and PX4 data under the 1400 B cap.
+                        packet["command"]["limiter"] = [
+                            state_code, command.get("episode_id"),
+                            command.get("episode_distance_m"),
+                            command.get("episode_limit_m"),
+                            command.get("velocity_cap_mps")]
                 except (OSError, ValueError, TypeError, KeyError):
                     packet["command"] = {"mode": "SHADOW", "transmitted": False,
                                          "fresh": False}
@@ -90,7 +114,7 @@ class MetadataSender:
                     packet["command"]["authority_reason"] = authority.get(
                         "authority_transition_reason")
             try:
-                data = encode_packet(packet)
+                data = encode_with_optional_limiter(packet)
                 self.socket.sendto(data, self.address)
                 self.sent += 1
                 self.sizes.append(len(data))

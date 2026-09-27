@@ -8,5 +8,5 @@
   "video_stale_ms": 1000,
   "width": 1280,
   "height": 960,
-  "metrics_jsonl": "runs/ground_station_v1.jsonl"
+  "metrics_jsonl": "runs/ground_station_v1_1.jsonl"
 }

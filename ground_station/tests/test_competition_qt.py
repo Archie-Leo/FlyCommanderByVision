@@ -27,9 +27,10 @@ class FakeMetadata:
     def __init__(self):
         self.packet = empty_snapshot()
         self.packet["ai_age_ms"] = 40
+        self.age = 10
 
     def snapshot(self):
-        return self.packet, 10, {"received": 1, "gaps": 0,
+        return self.packet, self.age, {"received": 1, "gaps": 0,
                                  "invalid": 0, "hz": 20.0}
 
     def close(self):
@@ -45,7 +46,8 @@ class CompetitionQtTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config = load_config()
             config["metrics_jsonl"] = Path(tmp) / "metrics.jsonl"
-            station = Console(config, video=FakeVideo(), metadata=FakeMetadata())
+            metadata = FakeMetadata()
+            station = Console(config, video=FakeVideo(), metadata=metadata)
             try:
                 station.show()
                 self.app.processEvents()
@@ -53,6 +55,7 @@ class CompetitionQtTests(unittest.TestCase):
                 station.refresh()
                 self.assertEqual(station.nodes["PX4"].value.text(), "DISCONNECTED")
                 self.assertEqual(station.nodes["PERCEPTION"].value.text(), "NO PERSON")
+                self.assertEqual(station.system_label.text(), "SYSTEM  ·  VIDEO LOST")
                 self.assertFalse(station.engineering.isVisible())
                 self.assertTrue(all(not button.isEnabled()
                                     for button in station.flight_buttons.values()))
@@ -72,6 +75,11 @@ class CompetitionQtTests(unittest.TestCase):
                     self.assertTrue(station.canvas.isVisible())
                     self.assertGreater(station.canvas.width(), 480)
                     self.assertGreater(station.canvas.height(), 320)
+                metadata.age = 700
+                station.last_ui_at = 0
+                station.refresh()
+                self.assertEqual(station.nodes["PERCEPTION"].value.text(), "METADATA LOST")
+                self.assertEqual(station.nodes["GESTURE"].value.text(), "--")
             finally:
                 station.close()
                 self.app.processEvents()

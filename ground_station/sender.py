@@ -25,12 +25,14 @@ def encode_with_optional_limiter(packet):
 
 class MetadataSender:
     def __init__(self, host, port=5603, hz=20, *, dry_run=None, px4_file=None,
-                 command_file=None, authority_snapshot=None, command_mode="SHADOW"):
+                 command_file=None, authority_snapshot=None, command_mode="SHADOW",
+                 recorder_port=None):
         if not 1 <= hz <= 30 or not 1 <= port <= 65535:
             raise ValueError("invalid metadata rate or port")
         if command_mode not in {"SHADOW", "LIVE"}:
             raise ValueError("invalid command mode")
         self.address = (host, port)
+        self.recorder_address = (("127.0.0.1", recorder_port) if recorder_port else None)
         self.dry_run = dry_run
         self.px4_file = px4_file
         self.command_file = command_file
@@ -41,6 +43,7 @@ class MetadataSender:
         self.period = 1 / hz
         self.lock = threading.Lock()
         self.latest = empty_snapshot()
+        self.evidence = None
         self.capture_ns = None
         self.rates = {"ai_fps": None, "video_fps": None}
         self.sequence = 0
@@ -50,10 +53,11 @@ class MetadataSender:
         self.thread = threading.Thread(target=self._run, name="metadata-udp", daemon=True)
         self.thread.start()
 
-    def publish(self, snapshot, capture_ns):
+    def publish(self, snapshot, capture_ns, evidence=None):
         with self.lock:
             self.latest = snapshot
             self.capture_ns = capture_ns
+            self.evidence = evidence
 
     def set_rates(self, ai_fps, video_fps):
         with self.lock:
@@ -67,6 +71,7 @@ class MetadataSender:
                 packet = copy.deepcopy(self.latest)
                 packet["system"] = dict(self.rates)
                 captured = self.capture_ns
+                evidence = self.evidence
                 self.sequence += 1
                 packet["sequence"] = self.sequence
             packet["ai_age_ms"] = (round((time.monotonic_ns()-captured)/1e6, 1)
@@ -123,6 +128,15 @@ class MetadataSender:
             try:
                 data = encode_with_optional_limiter(packet)
                 self.socket.sendto(data, self.address)
+                if self.recorder_address:
+                    try:
+                        self.socket.sendto(data, self.recorder_address)
+                        if evidence is not None:
+                            local = json.dumps({"kind": "vision_evidence", **evidence},
+                                               allow_nan=False, separators=(",", ":")).encode()
+                            self.socket.sendto(local, self.recorder_address)
+                    except (OSError, BlockingIOError, ValueError, TypeError):
+                        pass  # Recorder cannot affect the production metadata path.
                 self.sent += 1
                 self.sizes.append(len(data))
                 if len(self.sizes) > 4096:

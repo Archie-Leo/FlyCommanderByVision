@@ -15,6 +15,7 @@ def disconnected(age_ms=None):
     return {"connected": False, "status_age_ms": age_ms, "mode": None,
             "nav_state": None, "armed": None, "failsafe": None,
             "preflight": None, "landed": None,
+            "z_valid": None, "vz_valid": None,
             "local_position_valid": None, "position": None, "velocity": None,
             "heading": None, "last_vehicle_command_ack": None}
 
@@ -46,6 +47,8 @@ def read_px4_snapshot(path: Path, *, now_ns=None):
                 "armed": status.get("armed"), "failsafe": status.get("failsafe"),
                 "preflight": status.get("pre_flight_checks_pass"),
                 "landed": land.get("landed") if land_fresh else None,
+                "z_valid": position.get("z_valid") if position_fresh else None,
+                "vz_valid": position.get("v_z_valid") if position_fresh else None,
                 "local_position_valid": pos_valid,
                 "position": ({axis: finite(position.get(axis), 2) for axis in ("x", "y", "z")}
                              if pos_valid else None),

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-units=(fcv-stack.target fcv-xrce.service fcv-telemetry.service fcv-runtime.service fcv-health.service)
+units=(fcv-stack.target fcv-xrce.service fcv-telemetry.service fcv-runtime.service fcv-health.service fcv-recorder.service)
 stop_stack() {
-  sudo systemctl stop fcv-stack.target fcv-runtime.service fcv-telemetry.service fcv-health.service fcv-xrce.service
+  sudo systemctl stop fcv-stack.target fcv-runtime.service fcv-telemetry.service fcv-health.service fcv-recorder.service fcv-xrce.service
   rm -f /tmp/fcv_system_status.json
 }
 case "${1:-}" in
@@ -18,7 +18,7 @@ case "${1:-}" in
     stop_stack
     sudo systemctl start fcv-stack.target
     ;;
-  logs) shift; exec journalctl --no-pager -u fcv-xrce.service -u fcv-telemetry.service -u fcv-runtime.service -u fcv-health.service "$@" ;;
+  logs) shift; exec journalctl --no-pager -u fcv-xrce.service -u fcv-telemetry.service -u fcv-runtime.service -u fcv-health.service -u fcv-recorder.service "$@" ;;
   xrce|vision|gateway)
     case "$1" in xrce) unit=fcv-xrce.service;; *) unit=fcv-runtime.service;; esac
     exec journalctl --no-pager -u "$unit" -n 80

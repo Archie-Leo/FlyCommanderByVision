@@ -193,7 +193,8 @@ def recent_window():
 def health():
     checks = {}
     units = ["fcv-stack.target", "fcv-xrce.service", "fcv-telemetry.service",
-             "fcv-command.service", "fcv-runtime.service", "fcv-health.service"]
+             "fcv-command.service", "fcv-runtime.service", "fcv-health.service",
+             "fcv-recorder.service"]
     unit_state = {name: run("systemctl", "is-active", name).stdout.strip() for name in units}
     checks["BOOT"] = all(value == "active" for value in unit_state.values())
     print("[BOOT]", unit_state)

@@ -15,9 +15,12 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFormLayout, QFrame,
 from .config import load_config
 from .command_client import CommandClient
 from .evidence import competition_state
+from .blocker import last_blocker
+from .flight_button_policy import evaluate_buttons
 from .metadata_receiver import MetadataReceiver
 from .overlay import VideoCanvas
 from .video_receiver import VideoReceiver
+from .session_recorder import GroundSessionRecorder
 
 
 COLORS = {"normal": "#68b7bb", "authorized": "#68d2a2",
@@ -140,6 +143,12 @@ class EngineeringDialog(QDialog):
         outer.setContentsMargins(16, 14, 16, 14)
         outer.addWidget(label("ENGINEERING DATA", "engineeringTitle"))
         outer.addWidget(label("Read-only · values from the current packet and local receiver", "engineeringHint"))
+        session_controls = QHBoxLayout()
+        self.start_session_button = QPushButton("START SESSION")
+        self.end_session_button = QPushButton("END SESSION")
+        session_controls.addWidget(self.start_session_button)
+        session_controls.addWidget(self.end_session_button)
+        outer.addLayout(session_controls)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.viewport().setStyleSheet("background:#17232d;")
@@ -174,6 +183,14 @@ class Console(QMainWindow):
         if self.command_client is None and config["command_key"].is_file():
             self.command_client = CommandClient(config["command_host"],
                 config["command_port"], config["command_key"].read_bytes().strip())
+        self.session_recorder = None
+        if config["command_key"].is_file():
+            try:
+                self.session_recorder = GroundSessionRecorder(
+                    config["metrics_jsonl"].parent, config["command_host"],
+                    config["command_key"].read_bytes().strip())
+            except OSError as exc:
+                print(f"RECORDER_DEGRADED: {exc}", flush=True)
         self.started_at = self.last_report_at = self.last_ui_at = time.monotonic()
         self.last_displayed = self.last_painted = self.last_packets = self.last_decoded = 0
         self.display_fps = self.decode_fps = self.metadata_hz = 0.0
@@ -241,6 +258,8 @@ class Console(QMainWindow):
         command_layout.addWidget(self.command_value)
         self.transaction_value = label("BRIDGE DISCONNECTED · TRANSACTION IDLE", "flowValue", wrap=True)
         command_layout.addWidget(self.transaction_value)
+        self.last_blocker_value = label("LAST BLOCKER · NONE", "flowValue", wrap=True)
+        command_layout.addWidget(self.last_blocker_value)
         buttons = QHBoxLayout()
         buttons.setSpacing(5)
         self.flight_buttons = {}
@@ -276,6 +295,11 @@ class Console(QMainWindow):
         outer.addLayout(footer)
         self.engineering = EngineeringDialog(self)
         self.engineering_button.clicked.connect(self.toggle_engineering)
+        self.engineering.start_session_button.clicked.connect(
+            lambda: self.session_recorder.start_session()
+            if self.session_recorder else None)
+        self.engineering.end_session_button.clicked.connect(
+            lambda: self.session_recorder.end_session() if self.session_recorder else None)
 
         self.setStyleSheet("""
             QMainWindow, QDialog, QWidget#root {background:#0c141b;}
@@ -322,32 +346,43 @@ class Console(QMainWindow):
     def _request_flight(self, command):
         if self.command_client is None:
             return
+        if self.session_recorder:
+            self.session_recorder.event("BUTTON_CLICKED", details={"button": command}, dedup=False)
         message = ("确认自动解锁并起飞至 1.2 m？\n\n请确认：\n- 飞行区域安全\n- 螺旋桨已正确安装\n"
                    "- 人员远离无人机\n- 遥控器可随时接管" if command == "TAKEOFF" else
                    "确认自动着陆？\n视觉控制将失去飞行权限，PX4 将进入自动着陆流程。")
         if QMessageBox.question(self, "确认高风险飞行命令", message,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            if self.session_recorder:
+                self.session_recorder.event("CONFIRMATION_CANCELLED", details={"button": command}, dedup=False)
             return
+        if self.session_recorder:
+            self.session_recorder.event("CONFIRMATION_ACCEPTED", details={"button": command}, dedup=False)
         try:
-            self.command_client.request(command)
+            request_id = self.command_client.request(command)
+            if self.session_recorder:
+                self.session_recorder.event("REQUEST_SENT", details={"button": command,
+                                                                    "request_id": request_id}, dedup=False)
         except RuntimeError as exc:
             set_text(self.transaction_value, f"REQUEST FAILED · {exc}")
+            if self.session_recorder:
+                self.session_recorder.event("REQUEST_FAILED", reason=str(exc),
+                                            details={"button": command}, dedup=False)
 
     def _refresh_flight_buttons(self, px4):
         feedback = self.command_client.snapshot() if self.command_client else None
-        bridge_ready = bool(feedback and feedback.get("bridge_state") == "READY" and
-                            feedback.get("enabled") is True)
-        busy = bool(feedback and feedback.get("transaction_state") not in
-                    ("IDLE", "COMPLETE", "FAILED", "ABORTED"))
-        takeoff_ready = (bridge_ready and not busy and px4["connected"] and
-                         px4["armed"] == "False" and px4["failsafe"] == "False" and
-                         px4.get("preflight") is True and px4.get("landed") is True and
-                         px4["local_position_valid"] == "VALID" and
-                         feedback.get("takeoff_height_verified") is True)
-        land_ready = (bridge_ready and not busy and px4["connected"] and
-                      px4["armed"] == "True" and px4["failsafe"] == "False" and
-                      px4.get("landed") is False)
+        takeoff_eval, land_eval = evaluate_buttons(feedback, px4)
+        busy = not takeoff_eval["transaction_idle"]
+        takeoff_ready = takeoff_eval["result"] == "ENABLED"
+        land_ready = land_eval["result"] == "ENABLED"
+        if self.session_recorder:
+            self.session_recorder.event("TAKEOFF_BUTTON_EVAL",
+                reason=takeoff_eval["primary_reason"] if not takeoff_ready else None,
+                details=takeoff_eval)
+            self.session_recorder.event("LAND_BUTTON_EVAL",
+                reason=land_eval["primary_reason"] if not land_ready else None,
+                details=land_eval)
         self.flight_buttons["TAKEOFF 1.2m"].setEnabled(bool(takeoff_ready))
         self.flight_buttons["LAND"].setEnabled(bool(land_ready))
         if not feedback:
@@ -387,6 +422,12 @@ class Console(QMainWindow):
             set_text(self.transaction_value, f"BRIDGE CONNECTED · TRANSACTION {state} · {detail}")
         else:
             set_text(self.transaction_value, "BRIDGE DISCONNECTED · TRANSACTION IDLE")
+        if self.session_recorder and feedback:
+            self.session_recorder.event("BRIDGE_FEEDBACK", reason=feedback.get("reason"),
+                details={key: feedback.get(key) for key in
+                         ("transaction_state", "command", "request_id", "px4_ack", "enabled",
+                          "armed", "nav_state", "failsafe")})
+        return takeoff_eval
 
     def refresh(self):
         frame, sequence, video_age, video_metrics = self.video.snapshot()
@@ -419,13 +460,16 @@ class Console(QMainWindow):
                           ("Lease", "lease"), ("Safety", "control_safety")):
             self.control_card.put(name, state[key])
         px4 = state["px4_details"]
-        self._refresh_flight_buttons(px4)
+        takeoff_eval = self._refresh_flight_buttons(px4)
         self.px4_card.set_status(*px4["node"])
         for name, key in (("Mode", "mode"), ("Armed", "armed"),
                           ("Failsafe", "failsafe"), ("Local Pos", "local_position_valid")):
             self.px4_card.put(name, px4[key])
         self.px4_card.put("Control", "LIVE GUARDED" if state["command_details"] and
                           state["command_details"].get("mode") == "LIVE" else "DRY-RUN")
+        set_text(self.control_mode_value, "CONTROL MODE  ·  LIVE GUARDED" if
+                 state["command_details"] and state["command_details"].get("mode") == "LIVE"
+                 else "CONTROL MODE  ·  DRY-RUN")
         command = state["command_details"]
         if command is None:
             command_text = "NOT FORWARDED  ·  DRY-RUN MODE"
@@ -449,6 +493,18 @@ class Console(QMainWindow):
                                        f"FAILSAFE {px4['failsafe']}  ·  LOCAL POS {px4['local_position_valid']}"
                                        if px4["connected"] else "NO DATA  ·  PX4 DISCONNECTED"))
         set_text(self.system_label, "SYSTEM  ·  " + state["system"])
+        blocker = last_blocker(state, takeoff_eval)
+        set_text(self.last_blocker_value, "LAST BLOCKER · " + blocker)
+        if self.session_recorder:
+            self.session_recorder.event("LAST_BLOCKER_CHANGED", reason=blocker,
+                                        details={"blocker": blocker})
+            self.session_recorder.event("UI_STATE_CHANGED", details={
+                "system": state["system"], "operator": state["operator_state"],
+                "gesture": state["control_gesture"], "intent": state["control_intent"],
+                "safety": state["control_safety"], "px4": px4["mode"],
+                "armed": px4["armed"], "command_mode": command.get("mode") if command else None})
+            self.session_recorder.event("VIDEO_LINK_STATE", details={"ready": video_ready})
+            self.session_recorder.event("METADATA_LINK_STATE", details={"ready": state["metadata_ready"]})
         if self.engineering.isVisible():
             self._refresh_engineering(packet if state["metadata_ready"] else None,
                                       metadata_age, video_age, metadata_metrics,
@@ -560,6 +616,8 @@ class Console(QMainWindow):
         self.metadata.close()
         self.video.close()
         self.metrics_file.close()
+        if self.session_recorder:
+            self.session_recorder.close()
         super().closeEvent(event)
 
 

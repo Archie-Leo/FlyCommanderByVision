@@ -1,0 +1,17 @@
+[Unit]
+Description=FCV read-only flight evidence recorder
+PartOf=fcv-stack.target
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lckfb
+EnvironmentFile=/etc/fcv/fcv.env
+ExecStart=/bin/bash /home/lckfb/FlyCommanderByVision/scripts/fcv_service.sh recorder
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=fcv-stack.target

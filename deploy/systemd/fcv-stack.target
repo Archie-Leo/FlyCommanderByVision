@@ -1,6 +1,6 @@
 [Unit]
 Description=FlyCommanderByVision guarded live stack
-Wants=fcv-xrce.service fcv-telemetry.service fcv-command.service fcv-runtime.service fcv-health.service
+Wants=fcv-xrce.service fcv-telemetry.service fcv-command.service fcv-runtime.service fcv-health.service fcv-recorder.service
 After=network-online.target
 
 [Install]

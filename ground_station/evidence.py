@@ -20,7 +20,8 @@ def _px4_state(packet, receive_age_ms):
         return {"node": ("DISCONNECTED", "PX4 telemetry stale", "muted"),
                 "connected": False, "mode": "--", "armed": "--", "failsafe": "--",
                 "local_position_valid": "--", "position": None, "velocity": None,
-                "status_age_ms": None, "nav_state": None, "ack": None}
+                "status_age_ms": None, "nav_state": None, "ack": None,
+                "z_valid": None, "vz_valid": None, "preflight": None, "landed": None}
     valid = px4.get("local_position_valid")
     return {"node": ("CONNECTED", "PX4 telemetry current", "authorized"),
             "connected": True, "mode": _label(px4.get("mode")),
@@ -30,6 +31,7 @@ def _px4_state(packet, receive_age_ms):
             "position": px4.get("position"), "velocity": px4.get("velocity"),
             "status_age_ms": age + receive_age_ms, "nav_state": px4.get("nav_state"),
             "preflight": px4.get("preflight"), "landed": px4.get("landed"),
+            "z_valid": px4.get("z_valid"), "vz_valid": px4.get("vz_valid"),
             "ack": px4.get("last_vehicle_command_ack")}
 
 

@@ -351,6 +351,10 @@ private:
     }
     offboard_mode_pub_->publish(mode);
     trajectory_pub_->publish(setpoint);
+    // Evidence only: this counter proves ROS publish() calls, not PX4 uORB RX.
+    ++tx_count_;
+    const auto published_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      CommandLease::Clock::now().time_since_epoch()).count();
     if (!live_snapshot_path_.empty()) {
       std::ostringstream json;
       json << "{\"mode\":\"LIVE\",\"transmitted\":true,\"ros_published\":true,"
@@ -361,6 +365,10 @@ private:
            << ",\"authority\":\"" << (gateway_authority ? "GRANTED" : "BLOCKED") << "\""
            << ",\"velocity\":[" << setpoint.velocity[0] << ','
            << setpoint.velocity[1] << ',' << setpoint.velocity[2] << ']'
+           << ",\"tx_count\":" << tx_count_
+           << ",\"last_publish_monotonic_ns\":" << published_ns
+           << ",\"offboard_mode_flags\":{\"position\":false,\"velocity\":true}"
+           << ",\"setpoint_position\":null,\"setpoint_yaw\":null"
            << ",\"yawspeed\":" << setpoint.yawspeed
            << ",\"safety_limiter_state\":\"" << episode_state_name(limiter_snapshot.state) << "\""
            << ",\"episode_id\":" << limiter_snapshot.episode_id
@@ -399,6 +407,7 @@ private:
   std::string live_snapshot_path_;
   std::ofstream shadow_trace_;
   uint64_t last_intent_seq_{0};
+  uint64_t tx_count_{0};
   bool last_intent_valid_{false};
   std::string last_intent_reason_;
   drone_control_gateway::msg::Intent::SharedPtr candidate_msg_;

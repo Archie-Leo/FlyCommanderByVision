@@ -384,6 +384,8 @@ def parse_args():
     p.add_argument("--stage6-jsonl", type=Path)
     p.add_argument("--metadata-host", help="Optional read-only UDP ground-station destination")
     p.add_argument("--metadata-port", type=int, default=5603)
+    p.add_argument("--recorder-port", type=int,
+                   help="Optional local read-only metadata mirror for the recorder")
     p.add_argument("--metadata-hz", type=float, default=20)
     p.add_argument("--px4-telemetry-file", type=Path,
                    help="Optional local read-only PX4 state file from px4_telemetry_readonly.py")
@@ -521,6 +523,7 @@ def main():
                                                       command_file=(args.gateway_live_file if args.px4_live else
                                                                     args.gateway_shadow_file if args.px4_shadow else None),
                                                       command_mode="LIVE" if args.px4_live else "SHADOW",
+                                                      recorder_port=args.recorder_port,
                                                       authority_snapshot=(shadow_node.authority_snapshot
                                                                           if shadow_node else None))
                 except (OSError, ValueError) as exc:
@@ -591,7 +594,15 @@ def main():
                     try:
                         visual = build_visual_snapshot(pose_frame, people, record,
                                                        source_id, metadata_adapter)
-                        metadata_sender.publish(visual, frame.timestamp_ns)
+                        metadata_sender.publish(visual, frame.timestamp_ns, evidence={
+                            "operator_state": record.get("ownership_state"),
+                            "operator_session_id": record.get("operator_session_id"),
+                            "track_id": record.get("current_track_id"),
+                            "gesture_raw": record.get("gesture_raw"),
+                            "gesture_stable": record.get("gesture_stable"),
+                            "authorized_valid": bool(authorized.valid),
+                            "gesture_confidence": float(authorized.gesture_confidence),
+                        })
                     except Exception:
                         metadata_snapshot_errors += 1
                 stage6_snapshot = dry_run.snapshot()

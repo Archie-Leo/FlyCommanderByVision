@@ -64,7 +64,27 @@ class Bridge:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("0.0.0.0", port))
         self.sock.setblocking(False)
+        self._evidence_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._evidence_socket.setblocking(False)
+        self._last_recorded_state = None
         self._write_state()
+
+    def _evidence(self, event, *, reason=None, old_state=None, new_state=None, details=None):
+        """Best-effort local diagnostic copy; never affects VehicleCommand."""
+        evidence_socket = getattr(self, "_evidence_socket", None)
+        if evidence_socket is None:
+            return
+        try:
+            payload = {"kind": "bridge_event", "event": event, "reason": reason,
+                       "old_state": old_state, "new_state": new_state,
+                       "details": {"request_id": self.transaction.request_id if self.transaction else None,
+                                   "command": self.transaction.command if self.transaction else None,
+                                   "armed": self.t.armed, "nav_state": self.t.nav_state,
+                                   "failsafe": self.t.failsafe, **(details or {})}}
+            evidence_socket.sendto(json.dumps(payload, allow_nan=False).encode(),
+                                         ("127.0.0.1", 5606))
+        except (OSError, ValueError, TypeError):
+            pass
 
     def status(self, msg):
         self.t.status_at = time.monotonic()
@@ -92,7 +112,14 @@ class Bridge:
         # from_external flag is not set in PX4 1.18, so do not filter on it.
         if (self.transaction and msg.target_system == 1 and msg.target_component == 191 and
                 int(msg.timestamp) > self.expected_ack_after_us):
+            before = self.transaction.state
             self.transaction.on_ack(int(msg.command), int(msg.result), time.monotonic())
+            if self.transaction.state != before or int(msg.result) != 5:
+                name = {400: "ARM", 22: "TAKEOFF", 21: "LAND"}.get(int(msg.command), "COMMAND")
+                self._evidence(name + ("_ACK_ACCEPTED" if int(msg.result) == 0 else "_ACK_DENIED"),
+                               reason=self.transaction.reason or None, old_state=before,
+                               new_state=self.transaction.state,
+                               details={"px4_ack": int(msg.result), "px4_command": int(msg.command)})
 
     def _write_state(self):
         state = {"service": "READY", "transaction": self.transaction.state if self.transaction else "IDLE",
@@ -149,12 +176,16 @@ class Bridge:
                     self._send_feedback(address, request_id=request_id,
                                         reason="DUPLICATE " + existing[1])
                     continue
+                self._evidence("REQUEST_RECEIVED", details={"request_id": request_id,
+                                                             "command": command})
                 # Persist before any command can be published. Reboot cannot replay.
                 self.db.execute("INSERT INTO requests VALUES (?,?,?)", (request_id, command, "ACTIVE"))
                 self.db.commit()
                 reason = ("BRIDGE DISABLED" if not self.enabled else
                           "COMMAND BUSY" if self.transaction and self.transaction.active else "")
                 if reason:
+                    self._evidence("REQUEST_REJECTED", reason=reason,
+                                   details={"request_id": request_id, "command": command})
                     self.db.execute("UPDATE requests SET state='REJECTED' WHERE id=?", (request_id,))
                     self.db.commit()
                     self._send_feedback(address, request_id=request_id, reason=reason,
@@ -164,6 +195,8 @@ class Bridge:
                 now = time.monotonic()
                 reason = precheck(command, self.t, now, takeoff_height_verified=self.height_verified)
                 if reason:
+                    self._evidence("PRECHECK_BLOCKED", reason=reason,
+                                   details={"request_id": request_id, "command": command})
                     self.db.execute("UPDATE requests SET state='REJECTED' WHERE id=?", (request_id,))
                     self.db.commit()
                     self._send_feedback(address, request_id=request_id, reason=reason,
@@ -172,6 +205,8 @@ class Bridge:
                 self.transaction = Transaction(request_id, command, now,
                                                self.t.z if command == "TAKEOFF" else None,
                                                self.t.z_reset, self.t.vz_reset)
+                self._evidence("PRECHECK_PASS", new_state="PRECHECK",
+                               details={"request_id": request_id, "command": command})
                 self.client = address
                 self._send_feedback(address)
             except (ValueError, KeyError, TypeError, json.JSONDecodeError):
@@ -202,6 +237,8 @@ class Bridge:
         self.expected_ack_after_us = self.last_status_timestamp_us
         self.publisher.publish(msg)
         self.command_count += 1
+        self._evidence(name + "_REQUEST_SENT", new_state=self.transaction.state if self.transaction else None,
+                       details={"px4_command": int(msg.command), "command_count": self.command_count})
 
     def run(self):
         try:
@@ -213,6 +250,17 @@ class Bridge:
                                                  height_verified=self.height_verified)
                     if name:
                         self._publish(name)
+                    if self.transaction.state != self._last_recorded_state:
+                        state = self.transaction.state
+                        event = ({"COMPLETE": self.transaction.command + "_COMPLETE",
+                                  "ABORTED": "ABORTED", "FAILED": "FAILED",
+                                  "TAKING_OFF": "TAKING_OFF", "STABILIZING": "STABILIZING",
+                                  "LANDING": "LANDING", "WAIT_DISARM": "LANDED",
+                                  "WAIT_ARMED": "ARMED_CONFIRMED"}.get(state, "TRANSACTION_STATE_CHANGED"))
+                        self._evidence(event, reason=self.transaction.reason or None,
+                                       old_state=self._last_recorded_state, new_state=state,
+                                       details={"px4_ack": self.transaction.ack})
+                        self._last_recorded_state = state
                     if (self.transaction.state in self.transaction.TERMINAL and
                             self.terminal_saved != self.transaction.request_id):
                         self.db.execute("UPDATE requests SET state=? WHERE id=?",
@@ -227,6 +275,7 @@ class Bridge:
             pass
         finally:
             self.sock.close()
+            self._evidence_socket.close()
             if self.transaction and self.transaction.active:
                 self.db.execute("UPDATE requests SET state='ABORTED_RESTART' WHERE id=?",
                                 (self.transaction.request_id,))

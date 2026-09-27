@@ -34,6 +34,10 @@ case "${1:-}" in
     [[ "${GROUND_TAKEOFF_HEIGHT_VERIFIED:-0}" == 1 ]] && args+=(--verified-native-takeoff-height)
     exec /usr/bin/python3 "$REPO/scripts/ground_command_bridge.py" "${args[@]}"
     ;;
+  recorder)
+    exec /usr/bin/python3 -m flight_evidence.board_recorder \
+      --repo "$REPO" --ground-ip "$GROUND_HOST" --key-file "$GROUND_COMMAND_KEY"
+    ;;
   runtime)
     wait_for 'Ground Station route' /usr/bin/python3 "$helper" route
     wait_for 'PX4 DDS' /usr/bin/python3 "$helper" wait-px4 --timeout 5
@@ -71,6 +75,7 @@ case "${1:-}" in
       --camera "$camera_device" --camera-fps 60 --video-fps 30 \
       --host "$GROUND_HOST" --port "$VIDEO_PORT" --bitrate-kbps "$VIDEO_BITRATE_KBPS" \
       --metadata-host "$GROUND_HOST" --metadata-port "$META_PORT" \
+      --recorder-port 5606 \
       --px4-telemetry-file "$PX4_TELEMETRY_FILE" \
       --gateway-live-file "$GATEWAY_LIVE_FILE" \
       --auto-reauthorize --async-perception --async-depth \
